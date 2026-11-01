@@ -6,6 +6,40 @@ can relay decoded MPEG-TS fragments from Hls.js/Clappr players or discover
 ordinary HLS URLs, then VLC plays just the video in the wall.
 The normal viewing window does not embed the source website.
 
+## Shareable Ubuntu installer
+
+Download **[game-stream_0.2.0_amd64.deb](releases/game-stream_0.2.0_amd64.deb)**
+from `releases/` and install with:
+
+```bash
+sudo apt install ./game-stream_0.2.0_amd64.deb
+```
+
+This is the Ubuntu/Linux installer; Android APK files do not run on Ubuntu.
+The package targets **Ubuntu 22.04 / 24.04 / 26.04 amd64 (x86-64)** with system
+Python 3.10–3.15. It installs the app, icon, launcher and declared native libraries.
+Open **Applications → Game Stream** and pin its running icon if desired.
+
+**First launch needs internet access and about 2 GB free disk space.** A progress
+dialog sets up a private Python environment and Chromium browser under
+`~/.local/share/game-stream/`. Python packages come from PyPI; the browser comes
+from Playwright's download service. Setup runs as the desktop user, never from
+root package-maintainer scripts. Do not run the app with sudo. If setup fails,
+launch again; diagnostics are in `~/.local/state/game-stream/setup.log`.
+A failed update keeps the previous working runtime until a replacement is ready.
+The small `.deb` is intentionally not an offline runtime bundle. SHA256 checksums
+are included in `releases/SHA256SUMS`.
+
+Build a fresh package from a configured source checkout with
+`./scripts/build-deb.sh` (requires `dpkg-deb`). It writes the installer and checksum
+to `releases/`. The package and its checksum are tracked in this repository for
+sharing. Native apt installation on each Ubuntu release still needs a host test;
+validation here builds/extracts the package, validates the launcher, checks the
+bundled wheel checksum, and tests the user-runtime update/rollback logic. A real
+relocated virtual environment also ran the installed wheel's Qt UI using existing
+verified dependencies; a clean Ubuntu apt installation and first-run network
+download still require a host test.
+
 ## Install on Ubuntu
 
 Ubuntu 22.04 / 24.04 or newer, Python 3.10–3.15, and a desktop session are the intended
@@ -163,6 +197,52 @@ also use the HTTP relay, allowing the browser to close after discovery. Uncheck
 **Show browser** to try automatic playback without a visible window. Some sites
 need a real player click, so visible browser mode is recommended first.
 
+### Games menu and Preferences
+
+Open **Preferences** and set **Sports root page**, defaulting to
+`https://v2.streameast.ga/`. Choose **Games → Refresh Games**, then navigate
+**sport → game → Load in quadrant 1–4**. The target pane receives the event-page
+link and loads it automatically. Selecting a quadrant outside the current pane
+count enables it. Selecting a hidden pane returns to the grid so you can see it.
+Game selections try the source player's Play control automatically; login,
+consent, popups or a changed player can still require a manual click in its browser.
+
+The menu groups NFL, NBA, MLB, NHL, NCAAF, NCAAB, WNBA, soccer and other recognized
+sports. Refresh runs in the background without stopping playing streams. Failed
+refreshes keep the last successful list and show the error in **Games (!)**.
+The last refresh time is displayed, since cached game links can become stale.
+Changing the configured root clears the old provider's list and starts a new
+refresh. **Use a browser to render the game list** is useful for JavaScript
+indexes. Even with it unchecked, an empty/failed HTTP result can fall back to
+browser rendering. No site challenge or access restriction is bypassed.
+
+Preferences are saved to `~/.config/game-stream/config.json` (or
+`$XDG_CONFIG_HOME/game-stream/config.json`). See [`config.example.json`](config.example.json):
+
+```json
+{
+  "root_url": "https://v2.streameast.ga/",
+  "catalog_browser": false,
+  "refresh_on_start": true,
+  "double_tap_ms": 350
+}
+```
+
+You can edit the file or use the Preferences dialog. **Refresh Games** reloads
+manual file changes. The cached catalog is private to your user under
+`~/.cache/game-stream/catalog.json` (`XDG_CACHE_HOME` is respected). Cookies and
+passwords are not stored in Preferences or the catalog. The imported cookie-file
+reference from your session can be used by the browser-based index refresh.
+
+Parsing recognizes same-site event anchors with sport/matchup paths, such as
+`/nfl/team-a-vs-team-b/1`. It handles relative links, nested anchor content and
+server duplicates. It does not promise support for every website or every future
+layout. A challenge/login page, no scheduled events, or a changed URL structure
+can produce no games. The development cloud cannot access the live configured
+root, so live root-page behavior needs testing on your Ubuntu host. Local static
+and JavaScript-rendered indexes are tested, and the saved site HTML supplied
+previously yielded its NFL game link.
+
 ### Keyboard and double-click controls
 
 Shortcuts work while Game Stream has focus, including its floating controls.
@@ -173,12 +253,18 @@ modified shortcuts, or open dropdowns. Keys for panes outside the selected
 | Key / action | Result |
 | --- | --- |
 | `1`, `2`, `3`, `4` | Select only that quadrant's audio, even with Solo audio unchecked. |
+| Double-tap `1`, `2`, `3`, `4` | Same zoom/audio action as `5`, `6`, `7`, `8`. Single taps still select audio immediately. |
 | `0` | Mute all; press again to restore the last selected audio source. |
 | `5`, `6`, `7`, `8` | Zoom quadrant 1, 2, 3, or 4 and select its audio. Enter fullscreen if needed. |
 | Same zoom key again | Return to the selected pane grid, staying fullscreen and preserving audio/mute. |
 | Double-click video while fullscreen | Zoom that quadrant and select its audio; double-click again to restore the grid without changing audio/mute. |
 | `F11` | Toggle window fullscreen. |
 | `Esc` | Restore the grid and leave fullscreen. |
+
+The default double-tap interval is 350 ms; Preferences allows 150–800 ms.
+Auto-repeat from holding a key is ignored. A second quick tap converts the first
+audio tap into the corresponding zoom action; zooming back out preserves the
+pre-tap mute/audio state just like `5–8`.
 
 Zooming changes the view and audio selection; it does not restart other streams.
 If you muted with `0` while zoomed, returning to the grid keeps that mute state.
@@ -251,6 +337,33 @@ HAR, tokens, media, and site decoder code are not part of this repository.
 This demonstrates the recorded transport, not a live test of current URLs or
 long-running session renewal. No environment network settings were changed.
 
+## Uninstall
+
+Close Game Stream first. For the system package, run as your normal desktop user:
+
+```bash
+game-stream-uninstall
+```
+
+For a source checkout:
+
+```bash
+./scripts/uninstall.sh
+```
+
+Use `--dry-run` to preview. The helper removes this user's app launcher/icons and
+only a marked, app-owned downloaded runtime; if a `.deb` is installed, it asks
+sudo to remove that package too. Preferences, saved sessions, the catalog cache,
+original cookie files, source checkout and source `.venv` are kept by default.
+Add `--purge-user-data` to also remove this user's known configuration/session/
+catalog files. Unrecognized files/directories are preserved. The helper removes
+only the Game Stream pin from GNOME favorites, preserving other favorites.
+
+Alternatively, `sudo apt remove game-stream` removes just the system package
+and keeps per-user runtime/data. No package-removal hook scans or deletes user
+home directories. Reinstalling can reuse the saved session. Other users can run
+the uninstall helper for their own user-specific files before package removal.
+
 ## Development and validation
 
 ```bash
@@ -265,7 +378,7 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `GAME_STREAM_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **30 tests passed on Python 3.12 and 3.14** with
+Current development validation: **42 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
@@ -277,7 +390,12 @@ Recovery tests cover private atomic writes, failed replacements, malformed state
 process termination, restore/decline behavior, settings checkpoints and clean
 shutdown's active-stream flags. Desktop tests validate the launcher, icon sizes,
 matching application IDs, repeat installation, and actual GIO execution from
-paths containing spaces and special characters.
+paths containing spaces and special characters. Added checks cover double-tap
+timing and audio/zoom parity, multi-sport parsing, rendered index discovery,
+config/cache validation, target-quadrant menu actions, failed refresh retention,
+in-flight root changes, safe uninstall ownership checks, package contents, and
+runtime staging/failed-update rollback. All imported Qt modules are supplied by
+PySide6-Essentials; unused Qt WebEngine/Addons are not required by fresh installs.
 Browser install dry runs verify download selection for Ubuntu 22.04,
 24.04 and 26.04 x64 without downloading browsers or changing system packages.
 This does not constitute a full install on each Ubuntu version. Qt control tests
@@ -302,6 +420,11 @@ Host smoke test:
   grid. Check the viewed source retains audio and explicit mute stays muted.
 - Type a URL containing digits: verify shortcuts do not interrupt editing.
 - Stop/reload a pane during playback and discovery; verify its browser exits.
+- Set a root in Preferences, refresh the catalog, and load a real event into each
+  target quadrant. Verify refreshed links and automated Play on your host.
+- Double-tap `1–4`, and try slow taps: quick taps zoom; slow taps stay audio-only.
+- Install the `.deb` on a clean Ubuntu amd64 desktop and complete first-run setup.
+  Test the Applications entry, dock pin, update, and uninstall behavior there.
 - Keep a session playing long enough to exercise the site's authorization renewal.
 - Run `./scripts/install-desktop.sh`, launch Game Stream from Applications, and
   pin the running icon. Verify it groups under that icon rather than Python.

@@ -1,0 +1,6 @@
+{
+  "root_url": "https://v2.streameast.ga/",
+  "catalog_browser": false,
+  "refresh_on_start": true,
+  "double_tap_ms": 350
+}

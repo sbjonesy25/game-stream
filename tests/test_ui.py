@@ -100,7 +100,7 @@ def test_persistent_worker_reload_stop_and_cleanup(monkeypatch):
     app = QApplication.instance() or QApplication([])
     relays = []
 
-    def resolve(*args, cancel, on_ready, on_status):
+    def resolve(*args, cancel, on_ready, on_status, **kwargs):
         relay = BrowserRelay()
         relays.append(relay)
         on_ready(Source(relay.url, relay=relay))

@@ -1,0 +1,29 @@
+Game Stream for Ubuntu amd64
+===========================
+
+Install with:
+  sudo apt install ./game-stream_0.2.0_amd64.deb
+
+Open Applications > Game Stream. First launch requires internet and about 2 GB
+of free disk space for its private Python dependencies and Chromium browser.
+A progress dialog reports setup. Native system dependencies are installed by
+apt; no Python packages or browsers are downloaded by root maintainer scripts.
+The per-user runtime is under ~/.local/share/game-stream (or XDG_DATA_HOME).
+If interrupted, launch again. A previous working runtime is kept if an update
+fails. Setup diagnostics are in ~/.local/state/game-stream/setup.log.
+
+Close the app before uninstalling. Run as the normal desktop user:
+  game-stream-uninstall
+Optional removal of this user's preferences/session/catalog:
+  game-stream-uninstall --purge-user-data
+Dry run:
+  game-stream-uninstall --dry-run
+
+Or remove only the system package:
+  sudo apt remove game-stream
+This preserves user runtime/settings; the uninstall helper removes the owned
+runtime too. Never run the application itself with sudo.
+
+Ubuntu 22.04/24.04/26.04 amd64 with Python 3.10-3.15 is the intended target.
+Other desktop Linux distributions can use the documented source installation.
+This is not an Android APK and does not run on Android.

@@ -9,7 +9,7 @@ from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEve
 from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QPushButton, QSlider, QVBoxLayout, QWidget, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+    QPushButton, QSlider, QVBoxLayout, QWidget, QTextEdit, QPlainTextEdit, QAbstractSpinBox, QMenu)
 
 from .proxy import Relay
 from .bridge import BrowserRelay
@@ -88,15 +88,16 @@ class ResolverWorker(QThread):
     failed = Signal(str)
     status = Signal(str)
 
-    def __init__(self, url, cookies, visible, parent):
+    def __init__(self, url, cookies, visible, parent, auto_play=False):
         super().__init__(parent)
         self.args = (url, cookies, visible)
         self.cancel = Event()
+        self.auto_play = auto_play
 
     def run(self):
         try:
             resolve(*self.args, cancel=self.cancel, on_ready=self.resolved.emit,
-                    on_status=self.status.emit)
+                    on_status=self.status.emit, auto_play=self.auto_play)
         except Exception as exc:
             if self.cancel.is_set():
                 return
@@ -114,6 +115,7 @@ class Pane(QFrame):
         self.number = number
         self.worker = None
         self.pending_reload = False
+        self.pending_auto_play = False
         self.want_playing = False
         self.relay = None
         self.player = wall.vlc.media_player_new()
@@ -211,10 +213,11 @@ class Pane(QFrame):
         self.player.audio_set_mute(not enabled)
         self.audio.setText('Audio on' if enabled else 'Audio off')
 
-    def load(self):
+    def load(self, auto_play=False):
         if self.worker is not None:
             self.stop()
             self.pending_reload = True
+            self.pending_auto_play = auto_play
             self.want_playing = True
             self.wall.session_changed()
             self.load_button.setEnabled(False)
@@ -231,7 +234,7 @@ class Pane(QFrame):
         self.status.setText('Open the source player and press Play. Waiting for video…')
         self.load_button.setEnabled(False)
         self.worker = ResolverWorker(self.url.text().strip(), self.wall.cookie_path,
-                                     self.wall.browser.isChecked(), self)
+                                     self.wall.browser.isChecked(), self, auto_play=auto_play)
         self.worker.resolved.connect(self.play)
         self.worker.failed.connect(self.failed)
         self.worker.status.connect(self.status.setText)
@@ -246,7 +249,8 @@ class Pane(QFrame):
             worker.deleteLater()
         if self.pending_reload and not self.wall.closing:
             self.pending_reload = False
-            QTimer.singleShot(0, self.load)
+            auto_play = self.pending_auto_play
+            QTimer.singleShot(0, lambda: self.load(auto_play=auto_play))
 
     def failed(self, message):
         self.stop()
@@ -307,6 +311,10 @@ class Wall(QMainWindow):
         super().__init__()
         self.vlc = instance
         self.recovery = None
+        self.catalog = None
+        self.double_tap_ms = 350
+        self._number_tap = None
+        self.key_clock = monotonic
         self.cookie_path = ''
         self.expanded = None
         self.closing = False
@@ -326,6 +334,12 @@ class Wall(QMainWindow):
         tools.setContentsMargins(2, 2, 2, 2)
         tools.setSpacing(6)
         tools.addWidget(QLabel('Game Stream'))
+        self.games_button = QPushButton('Games ▾')
+        self.games_menu = QMenu(self.games_button)
+        self.games_button.setMenu(self.games_menu)
+        tools.addWidget(self.games_button)
+        self.preferences_button = QPushButton('Preferences')
+        tools.addWidget(self.preferences_button)
         tools.addStretch()
         tools.addWidget(QLabel('Panes'))
         self.count = QComboBox()
@@ -435,24 +449,49 @@ class Wall(QMainWindow):
         if (isinstance(focus, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)) or
                 QApplication.activeModalWidget() or QApplication.activePopupWidget() or
                 event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier):
+            self._number_tap = None
             return False
         key = event.key() - Qt.Key.Key_0
         if not 0 <= key <= 8:
+            self._number_tap = None
             return False
         if not event.isAutoRepeat():
             if key == 0:
+                self._number_tap = None
                 self.toggle_audio_mute()
             elif key <= 4:
-                self.select_audio(self.panes[key - 1])
+                pane = self.panes[key - 1]
+                audio_before = [p.audio.isChecked() for p in self.panes]
+                last_before = self.last_audio
+                self.select_audio(pane)
+                now = self.key_clock()
+                previous = self._number_tap
+                self._number_tap = (key, now, audio_before, last_before) if self.pane_enabled(pane) else None
+                if (self.pane_enabled(pane) and previous and previous[0] == key and
+                        0 <= now - previous[1] <= self.double_tap_ms / 1000):
+                    self._number_tap = None
+                    # The first tap acts immediately. Roll back that tentative
+                    # audio choice before the zoom action so zoom-out preserves
+                    # mute/last audio exactly like keys 5–8.
+                    for p in self.panes:
+                        p.audio.setChecked(False)
+                    for p, enabled in zip(self.panes, previous[2]):
+                        if enabled and self.pane_enabled(p):
+                            p.audio.setChecked(True)
+                    self.last_audio = previous[3]
+                    self.zoom_shortcut(pane)
             else:
-                pane = self.panes[key - 5]
-                if self.pane_enabled(pane):
-                    if not self.isFullScreen():
-                        self.showFullScreen()
-                    self.expand(pane)
+                self._number_tap = None
+                self.zoom_shortcut(self.panes[key - 5])
         if self.immersive:
             self.show_controls()
         return True
+
+    def zoom_shortcut(self, pane):
+        if self.pane_enabled(pane):
+            if not self.isFullScreen():
+                self.showFullScreen()
+            self.expand(pane)
 
     def pane_enabled(self, pane):
         return pane in self.panes[:self.count.currentIndex() + 1]
@@ -604,6 +643,7 @@ class Wall(QMainWindow):
         self.session_changed()
 
     def arrange(self, *_):
+        self._number_tap = None
         self.expanded = None
         count = self.count.currentIndex() + 1
         for pane in self.panes:
@@ -655,13 +695,16 @@ class Wall(QMainWindow):
         if not self.closing and self.recovery:
             self.recovery.before_close()
         self.closing = True
+        if self.catalog:
+            self.catalog.shutdown()
         self.video_input.hide()
         self.tools_overlay.hide()
         for pane in self.panes:
             pane.overlay.hide()
         for pane in self.panes:
             pane.stop()
-        if any(pane.worker and pane.worker.isRunning() for pane in self.panes):
+        if (any(pane.worker and pane.worker.isRunning() for pane in self.panes) or
+                (self.catalog and self.catalog.busy())):
             event.ignore()
             self.setWindowTitle('Game Stream — closing source browsers…')
             QTimer.singleShot(300, self.close)
@@ -703,7 +746,12 @@ def main():
     wall.show()
     from .recovery import SessionRecovery
     recovery = SessionRecovery(wall)
-    QTimer.singleShot(0, recovery.start)
+    from .catalog_ui import CatalogController
+    catalog = CatalogController(wall)
+    def startup():
+        recovery.start()
+        catalog.start()
+    QTimer.singleShot(0, startup)
     return app.exec()
 
 

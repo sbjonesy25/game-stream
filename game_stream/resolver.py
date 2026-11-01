@@ -43,7 +43,7 @@ def load_cookies(path):
 
 
 def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
-            on_ready=None, on_status=None):
+            on_ready=None, on_status=None, auto_play=False):
     """With on_ready, run a browser bridge until cancellation; otherwise discover HLS."""
     from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout
     from .bridge import BrowserRelay
@@ -125,20 +125,33 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                 if not announced and monotonic() > deadline:
                     raise RuntimeError('No supported video detected. In browser mode, press Play and wait for video. '
                                        'Supported players: HLS URLs and Hls.js/Clappr MPEG-TS. DRM and DASH are unsupported.')
-                # Never click a playing video: that would pause the source. In visible
-                # mode the user controls Play/login; headless mode tries player controls.
-                if not visible and not announced and monotonic() - last_click > 5:
+                # Never click a playing video: that would pause the source. Catalog
+                # selections can try Play even in visible mode; manual links keep
+                # their existing interaction behavior.
+                if (not visible or auto_play) and not announced and monotonic() - last_click > 5:
                     for frame in page.frames:
                         try:
-                            frame.evaluate("""() => { for (const v of document.querySelectorAll('video')) {
-                                v.muted = true; if (v.paused) v.play().catch(() => {});
-                            }}""")
+                            paused = frame.evaluate("""() => ![...document.querySelectorAll('video')].some(v => !v.paused)""")
+                            if not paused:
+                                continue
                         except Exception:
                             continue
-                        for selector in ('.vjs-big-play-button', '.jw-icon-display',
+                        clicked = False
+                        for selector in ('.vjs-big-play-button', '.jw-icon-playback[aria-label="Play"]',
                                          '.play-wrapper', 'button[aria-label="Play"]'):
                             try:
-                                frame.locator(selector).first.click(timeout=150)
+                                control = frame.locator(selector).first
+                                if control.is_visible():
+                                    control.click(timeout=150)
+                                    clicked = True
+                                    break
+                            except Exception:
+                                pass
+                        if not clicked:
+                            try:
+                                frame.evaluate("""() => { for (const v of document.querySelectorAll('video')) {
+                                    v.muted = true; if (v.paused) v.play().catch(() => {});
+                                }}""")
                             except Exception:
                                 pass
                     last_click = monotonic()
