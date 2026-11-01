@@ -5,11 +5,11 @@ from time import monotonic
 
 # libVLC embeds into an X11 window; XWayland supports this on Ubuntu Wayland.
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEvent, QPoint
-from PySide6.QtGui import QKeySequence, QShortcut, QCursor
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEvent, QPoint, QRect
+from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QPushButton, QSlider, QVBoxLayout, QWidget)
+    QPushButton, QSlider, QVBoxLayout, QWidget, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
 
 from .proxy import Relay
 from .bridge import BrowserRelay
@@ -19,7 +19,8 @@ from .resolver import resolve, validate_url
 class FloatingBar(QFrame):
     """A native tool window stays above VLC's embedded native video surface."""
     def __init__(self, wall):
-        super().__init__(wall, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint)
+        super().__init__(wall, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
+                         Qt.WindowType.BypassWindowManagerHint)
         self.setObjectName('hoverBar')
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.box = QVBoxLayout(self)
@@ -46,6 +47,39 @@ class FloatingBar(QFrame):
     def faded(self):
         if self.windowOpacity() < 0.01:
             self.hide()
+
+
+class VideoInputLayer(QWidget):
+    """Catch clicks above libVLC's native X11 children without covering video.
+
+    A plain Qt event filter cannot reliably see events sent to VLC's X11 window.
+    This transparent input window follows the fullscreen canvas. Override-redirect
+    prevents the window manager moving it into the desktop's smaller work area.
+    It is hidden whenever another application takes focus.
+    """
+    def __init__(self, wall):
+        super().__init__(wall, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
+                         Qt.WindowType.BypassWindowManagerHint | Qt.WindowType.WindowDoesNotAcceptFocus)
+        self.wall = wall
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
+        self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setStyleSheet('background: transparent; border: none;')
+        QShortcut(QKeySequence('F11'), self, activated=wall.toggle_fullscreen)
+        QShortcut(QKeySequence('Escape'), self, activated=wall.restore)
+
+    def paintEvent(self, event):
+        # Nonzero alpha also receives input on compositors that pass clicks
+        # through fully transparent pixels. This does not reserve video space.
+        painter = QPainter(self)
+        painter.fillRect(self.rect(), QColor(0, 0, 0, 1))
+
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton and self.wall.immersive:
+            self.wall.zoom_at(event.globalPosition().toPoint())
+            event.accept()
+        else:
+            super().mouseDoubleClickEvent(event)
 
 
 class ResolverWorker(QThread):
@@ -99,7 +133,9 @@ class Pane(QFrame):
         chrome_layout.setSpacing(2)
         self.layout.addWidget(self.chrome)
         self.overlay = FloatingBar(wall)
-        entry = QHBoxLayout()
+        self.entry = QWidget()
+        entry = QHBoxLayout(self.entry)
+        entry.setContentsMargins(0, 0, 0, 0)
         entry.setSpacing(4)
         entry.addWidget(QLabel(f'{number}'))
         self.full = QPushButton('Expand')
@@ -111,8 +147,7 @@ class Pane(QFrame):
         self.load_button = QPushButton('Load')
         self.load_button.clicked.connect(self.load)
         entry.addWidget(self.load_button)
-        entry.addWidget(self.full)
-        chrome_layout.addLayout(entry)
+        chrome_layout.addWidget(self.entry)
         controls = QHBoxLayout()
         controls.setSpacing(4)
         pause = QPushButton('Pause')
@@ -124,6 +159,8 @@ class Pane(QFrame):
         controls.addWidget(stop)
         self.audio = QPushButton('Audio off')
         self.audio.setCheckable(True)
+        self.audio.setToolTip(f'{number}: select this audio · 0: mute / restore last audio')
+        self.full.setToolTip(f'{number + 4}: toggle this stream fullscreen · double-click video to zoom / restore')
         self.audio.toggled.connect(self.set_audio)
         controls.addWidget(self.audio)
         self.volume = QSlider(Qt.Orientation.Horizontal)
@@ -133,6 +170,11 @@ class Pane(QFrame):
         self.volume.setToolTip('Volume')
         self.volume.valueChanged.connect(self.player.audio_set_volume)
         controls.addWidget(self.volume)
+        controls.addWidget(self.full)
+        self.reload_button = QPushButton('Reload')
+        self.reload_button.clicked.connect(self.load)
+        self.reload_button.hide()
+        controls.addWidget(self.reload_button)
         self.status = QLabel('Ready — paste a link above')
         self.status.setMinimumWidth(0)
         self.status.setWordWrap(True)
@@ -143,6 +185,8 @@ class Pane(QFrame):
         self.timer.start(750)
 
     def set_immersive(self, enabled):
+        self.entry.setVisible(not enabled)
+        self.reload_button.setVisible(enabled)
         if enabled and self.chrome.parent() is not self.overlay:
             self.layout.removeWidget(self.chrome)
             self.overlay.box.addWidget(self.chrome)
@@ -155,6 +199,8 @@ class Pane(QFrame):
             self.overlay.hide()
 
     def set_audio(self, enabled):
+        if enabled:
+            self.wall.last_audio = self
         if enabled and self.wall.solo.isChecked():
             for pane in self.wall.panes:
                 if pane is not self:
@@ -255,6 +301,8 @@ class Wall(QMainWindow):
         self.expanded = None
         self.closing = False
         self.immersive = False
+        self.last_audio = None
+        self.hovered_pane = None
         self.setWindowTitle('Streamwall')
         self.resize(1280, 850)
         self.root = QWidget()
@@ -293,6 +341,7 @@ class Wall(QMainWindow):
         tools.addWidget(full)
         self.layout.addWidget(self.tools)
         self.tools_overlay = FloatingBar(self)
+        self.video_input = VideoInputLayer(self)
         self.grid = QGridLayout()
         self.grid.setContentsMargins(0, 0, 0, 0)
         self.grid.setSpacing(2)
@@ -312,10 +361,75 @@ class Wall(QMainWindow):
         QApplication.instance().installEventFilter(self)
 
     def eventFilter(self, watched, event):
-        if self.immersive and event.type() in (QEvent.Type.KeyPress, QEvent.Type.MouseButtonPress,
+        owned = isinstance(watched, QWidget) and watched.window() in self.owned_windows()
+        if owned:
+            if event.type() == QEvent.Type.KeyPress and self.handle_number_key(event):
+                return True
+            if (event.type() == QEvent.Type.MouseButtonDblClick and self.immersive and
+                    event.button() == Qt.MouseButton.LeftButton and watched in [p.video for p in self.panes]):
+                self.zoom_at(event.globalPosition().toPoint())
+                return True
+        if owned and self.immersive and event.type() in (QEvent.Type.KeyPress, QEvent.Type.MouseButtonPress,
                                                QEvent.Type.Wheel):
             self.show_controls()
         return super().eventFilter(watched, event)
+
+    def owned_windows(self):
+        return [self, self.video_input, self.tools_overlay, *[p.overlay for p in self.panes]]
+
+    def handle_number_key(self, event):
+        # Numbers typed into URLs (including the fullscreen toolbar's dialogs)
+        # must remain text, and modified keys retain their normal meaning.
+        focus = QApplication.focusWidget()
+        if (isinstance(focus, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)) or
+                QApplication.activeModalWidget() or QApplication.activePopupWidget() or
+                event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier):
+            return False
+        key = event.key() - Qt.Key.Key_0
+        if not 0 <= key <= 8:
+            return False
+        if not event.isAutoRepeat():
+            if key == 0:
+                self.toggle_audio_mute()
+            elif key <= 4:
+                self.select_audio(self.panes[key - 1])
+            else:
+                pane = self.panes[key - 5]
+                if self.pane_enabled(pane):
+                    if not self.isFullScreen():
+                        self.showFullScreen()
+                    self.expand(pane)
+        if self.immersive:
+            self.show_controls()
+        return True
+
+    def pane_enabled(self, pane):
+        return pane in self.panes[:self.count.currentIndex() + 1]
+
+    def select_audio(self, pane):
+        if not self.pane_enabled(pane):
+            return
+        for other in self.panes:
+            if other is not pane:
+                other.audio.setChecked(False)
+        pane.audio.setChecked(True)
+        self.last_audio = pane
+
+    def toggle_audio_mute(self):
+        audible = [p for p in self.panes if p.audio.isChecked()]
+        if audible:
+            if self.last_audio not in audible:
+                self.last_audio = audible[-1]
+            for pane in audible:
+                pane.audio.setChecked(False)
+        elif self.last_audio is not None:
+            self.select_audio(self.last_audio)
+
+    def zoom_at(self, point):
+        for pane in self.panes:
+            if pane.isVisible() and QRect(pane.mapToGlobal(QPoint()), pane.size()).contains(point):
+                self.expand(pane)
+                return
 
     def changeEvent(self, event):
         super().changeEvent(event)
@@ -333,6 +447,7 @@ class Wall(QMainWindow):
             self.tools_overlay.box.addWidget(self.tools)
             self.tools.show()
         else:
+            self.video_input.hide()
             self.tools_overlay.animation.stop()
             self.tools_overlay.box.removeWidget(self.tools)
             self.layout.insertWidget(0, self.tools)
@@ -348,35 +463,59 @@ class Wall(QMainWindow):
             QTimer.singleShot(0, self.show_controls)
 
     def poll_pointer(self):
+        if self.closing:
+            return
         point = QCursor.pos()
-        if self.immersive and QApplication.activeWindow() not in [self, self.tools_overlay, *[p.overlay for p in self.panes]]:
+        if self.immersive and QApplication.activeWindow() not in self.owned_windows():
+            self.video_input.hide()
             for bar in [self.tools_overlay, *[p.overlay for p in self.panes]]:
                 bar.hide()
             self.last_pointer = point
             return
+        if self.immersive and not self.video_input.isVisible():
+            self.position_video_input()
         if self.immersive and point != self.last_pointer and self.frameGeometry().contains(point):
             self.show_controls()
         self.last_pointer = point
+
+    def position_video_input(self):
+        self.video_input.setGeometry(QRect(self.root.mapToGlobal(QPoint()), self.root.size()))
+        self.video_input.show()
+        self.video_input.raise_()
 
     def position_controls(self):
         self.tools_overlay.resize(self.width() - 16, self.tools.sizeHint().height() + 8)
         self.tools_overlay.move(self.root.mapToGlobal(QPoint(8, 8)))
         for pane in self.panes:
             if pane.isVisible():
-                width = min(pane.width() - 12, 900)
+                # Fullscreen omits the URL row: each HUD fits comfortably within
+                # its video, including two-pane views and larger UI font scales.
+                width = min(pane.width() - 12, 620)
                 height = pane.chrome.sizeHint().height() + 8
+                pane.overlay.setFixedWidth(width)
                 pane.overlay.resize(width, height)
                 position = pane.mapToGlobal(pane.rect().bottomLeft())
                 pane.overlay.move(position.x() + (pane.width() - width) // 2, position.y() - height - 5)
 
     def show_controls(self):
-        if not self.immersive or self.closing:
+        if not self.immersive or self.closing or QApplication.activeModalWidget():
             return
         self.root.unsetCursor()
+        self.video_input.unsetCursor()
+        self.position_video_input()
         self.position_controls()
         self.tools_overlay.reveal()
+        point = QCursor.pos()
+        # Show just the pane under the pointer. Native tool windows can be
+        # repositioned by desktop work-area constraints; never let two HUDs
+        # obscure one another, even with a dock or fractional display scaling.
+        hovered = next((p for p in self.panes if p.overlay.isVisible() and p.overlay.geometry().contains(point)), None)
+        if hovered is None:
+            hovered = next((p for p in self.panes if p.isVisible() and
+                            QRect(p.mapToGlobal(QPoint()), p.size()).contains(point)), None)
+        self.hovered_pane = hovered
         for pane in self.panes:
-            if pane.isVisible():
+            if pane.isVisible() and pane is hovered:
                 pane.overlay.reveal()
             else:
                 pane.overlay.hide()
@@ -392,12 +531,13 @@ class Wall(QMainWindow):
         for pane in self.panes:
             pane.overlay.fade()
         self.root.setCursor(Qt.CursorShape.BlankCursor)
+        self.video_input.setCursor(Qt.CursorShape.BlankCursor)
 
     def enforce_solo(self, checked):
         if checked:
             audible = [pane for pane in self.panes if pane.audio.isChecked()]
-            for pane in audible[1:]:
-                pane.audio.setChecked(False)
+            if audible:
+                self.select_audio(self.last_audio if self.last_audio in audible else audible[-1])
 
     def select_cookies(self):
         path, _ = QFileDialog.getOpenFileName(self, 'Select Netscape cookies.txt', '', 'Cookie files (*.txt);;All files (*)')
@@ -423,6 +563,8 @@ class Wall(QMainWindow):
         for pane in self.panes[count:]:
             pane.stop()  # Hidden streams must not consume bandwidth or play audio.
             pane.audio.setChecked(False)
+        if self.last_audio is not None and not self.pane_enabled(self.last_audio):
+            self.last_audio = None
         for i in range(2):
             self.grid.setRowStretch(i, 1 if i == 0 or count > 2 else 0)
             self.grid.setColumnStretch(i, 1 if i == 0 or count > 1 else 0)
@@ -430,9 +572,12 @@ class Wall(QMainWindow):
             QTimer.singleShot(0, self.show_controls)
 
     def expand(self, pane):
+        if not self.pane_enabled(pane):
+            return
         if self.expanded is pane:
             self.arrange()
             return
+        self.select_audio(pane)
         self.expanded = pane
         for other in self.panes:
             self.grid.removeWidget(other)
@@ -454,6 +599,7 @@ class Wall(QMainWindow):
 
     def closeEvent(self, event):
         self.closing = True
+        self.video_input.hide()
         self.tools_overlay.hide()
         for pane in self.panes:
             pane.overlay.hide()

@@ -49,6 +49,7 @@ def test_layout_audio_fullscreen_and_cleanup():
 
 def test_fullscreen_video_spacing_and_fading_controls():
     from PySide6.QtCore import QPoint, Qt
+    from PySide6.QtGui import QCursor
     from PySide6.QtTest import QTest
     app = QApplication.instance() or QApplication([])
     wall = Wall(Mock())
@@ -66,8 +67,10 @@ def test_fullscreen_video_spacing_and_fading_controls():
     a, b, c = wall.panes[:3]
     assert b.video.mapToGlobal(QPoint()).x() - a.video.mapToGlobal(QPoint()).x() - a.video.width() == 2
     assert c.video.mapToGlobal(QPoint()).y() - a.video.mapToGlobal(QPoint()).y() - a.video.height() == 2
+    QCursor.setPos(wall.panes[0].mapToGlobal(wall.panes[0].rect().center()))
     wall.show_controls()
-    assert all(p.overlay.isVisible() for p in wall.panes)
+    assert wall.panes[0].overlay.isVisible()
+    assert sum(p.overlay.isVisible() for p in wall.panes) == 1
     wall.fade_controls()
     for bar in [wall.tools_overlay, *[p.overlay for p in wall.panes]]:
         bar.animation.setCurrentTime(bar.animation.duration())
@@ -130,4 +133,166 @@ def test_persistent_worker_reload_stop_and_cleanup(monkeypatch):
     finally:
         pane.stop()
         until(lambda: pane.worker is None)
+        wall.close()
+
+
+def test_audio_number_keys_mute_restore_and_editing():
+    from PySide6.QtCore import Qt
+    from PySide6.QtGui import QKeyEvent
+    from PySide6.QtCore import QEvent
+    from PySide6.QtTest import QTest
+    app = QApplication.instance() or QApplication([])
+    engine = Mock()
+    players = [Mock() for _ in range(4)]
+    engine.media_player_new.side_effect = players
+    wall = Wall(engine)
+    wall.show()
+    app.processEvents()
+    try:
+        for i in range(4):
+            QTest.keyClick(wall, Qt.Key.Key_1 + i)
+            assert [p.audio.isChecked() for p in wall.panes] == [j == i for j in range(4)]
+            players[i].audio_set_mute.assert_called_with(False)
+        QTest.keyClick(wall, Qt.Key.Key_2, Qt.KeyboardModifier.KeypadModifier)
+        assert wall.panes[1].audio.isChecked()
+        QTest.keyClick(wall, Qt.Key.Key_4, Qt.KeyboardModifier.ControlModifier)
+        assert wall.panes[1].audio.isChecked()
+        QTest.keyClick(wall, Qt.Key.Key_4)
+        QTest.keyClick(wall, Qt.Key.Key_0)
+        assert not any(p.audio.isChecked() for p in wall.panes)
+        QTest.keyClick(wall, Qt.Key.Key_0)
+        assert wall.panes[3].audio.isChecked()
+        wall.solo.setChecked(False)
+        wall.panes[0].audio.setChecked(True)
+        QTest.keyClick(wall, Qt.Key.Key_0)
+        assert not any(p.audio.isChecked() for p in wall.panes)
+        QTest.keyClick(wall, Qt.Key.Key_0)
+        assert [p.audio.isChecked() for p in wall.panes] == [True, False, False, False]
+        QTest.keyClick(wall, Qt.Key.Key_2)
+        assert [p.audio.isChecked() for p in wall.panes] == [False, True, False, False]
+        # Auto-repeat must not toggle mute repeatedly when a key is held.
+        app.sendEvent(wall, QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_0,
+                                     Qt.KeyboardModifier.NoModifier, '0', True))
+        assert wall.panes[1].audio.isChecked()
+        field = wall.panes[0].url
+        field.setFocus()
+        app.processEvents()
+        QTest.keyClicks(field, '012345678')
+        assert field.text() == '012345678'
+        assert wall.panes[1].audio.isChecked()
+        assert wall.expanded is None
+        # Shortcut keys for panes removed from the layout have no side effects.
+        field.clearFocus()
+        wall.count.setCurrentIndex(0)
+        wall.select_audio(wall.panes[0])
+        QTest.keyClick(wall, Qt.Key.Key_4)
+        QTest.keyClick(wall, Qt.Key.Key_8)
+        assert wall.panes[0].audio.isChecked()
+        assert wall.expanded is None
+        assert not wall.isFullScreen()
+    finally:
+        wall.close()
+
+
+def test_zoom_number_keys_follow_audio_and_restore_grid():
+    from PySide6.QtCore import Qt
+    from PySide6.QtTest import QTest
+    app = QApplication.instance() or QApplication([])
+    wall = Wall(Mock())
+    wall.show()
+    app.processEvents()
+    try:
+        for i in range(4):
+            QTest.keyClick(wall, Qt.Key.Key_5 + i)
+            app.processEvents()
+            assert wall.isFullScreen()
+            assert wall.expanded is wall.panes[i]
+            assert sum(p.isVisible() for p in wall.panes) == 1
+            assert [p.audio.isChecked() for p in wall.panes] == [i == j for j in range(4)]
+            # Keys also work when a floating control is the keyboard recipient.
+            QTest.keyClick(wall.tools_overlay, Qt.Key.Key_5 + i)
+            app.processEvents()
+            assert wall.expanded is None
+            assert wall.isFullScreen()
+            assert all(p.isVisible() for p in wall.panes)
+            assert wall.panes[i].audio.isChecked()
+        QTest.keyClick(wall, Qt.Key.Key_0)
+        assert not any(p.audio.isChecked() for p in wall.panes)
+        QTest.keyClick(wall, Qt.Key.Key_0)
+        assert wall.panes[3].audio.isChecked()
+        QTest.keyClick(wall, Qt.Key.Key_5)
+        QTest.keyClick(wall, Qt.Key.Key_6)
+        assert wall.expanded is wall.panes[1]
+        assert wall.panes[1].audio.isChecked()
+        QTest.keyClick(wall, Qt.Key.Key_0)
+        QTest.keyClick(wall, Qt.Key.Key_6)
+        assert wall.expanded is None
+        assert not any(p.audio.isChecked() for p in wall.panes)
+        QTest.keyClick(wall, Qt.Key.Key_0)
+        assert wall.panes[1].audio.isChecked()
+    finally:
+        wall.close()
+
+
+def test_double_click_input_above_native_video_and_audio():
+    from PySide6.QtCore import Qt, QPoint
+    from PySide6.QtTest import QTest
+    app = QApplication.instance() or QApplication([])
+    wall = Wall(Mock())
+    wall.show()
+    wall.toggle_fullscreen()
+    app.processEvents()
+    try:
+        assert wall.video_input.isVisible()
+        for count in (2, 4):
+            wall.count.setCurrentIndex(count - 1)
+            app.processEvents()
+            pane = wall.panes[count - 1]
+            point = wall.video_input.mapFromGlobal(pane.mapToGlobal(pane.rect().center()))
+            QTest.mouseDClick(wall.video_input, Qt.MouseButton.LeftButton, pos=point)
+            app.processEvents()
+            assert wall.expanded is pane
+            assert pane.audio.isChecked()
+            assert sum(p.isVisible() for p in wall.panes) == 1
+            # Returning to the grid must not switch audio away from this stream.
+            QTest.mouseDClick(wall.video_input, Qt.MouseButton.LeftButton,
+                             pos=wall.video_input.rect().center())
+            app.processEvents()
+            assert wall.expanded is None
+            assert wall.isFullScreen()
+            assert sum(p.isVisible() for p in wall.panes) == count
+            assert pane.audio.isChecked()
+        wall.restore()
+        app.processEvents()
+        assert not wall.video_input.isVisible()
+    finally:
+        wall.close()
+
+
+def test_two_pane_hover_controls_never_overlap():
+    from PySide6.QtCore import QPoint, QRect
+    from PySide6.QtGui import QCursor
+    app = QApplication.instance() or QApplication([])
+    wall = Wall(Mock())
+    wall.show()
+    wall.count.setCurrentIndex(1)
+    wall.toggle_fullscreen()
+    app.processEvents()
+    try:
+        for pane in wall.panes[:2]:
+            QCursor.setPos(pane.mapToGlobal(pane.rect().center()))
+            wall.show_controls()
+            app.processEvents()
+            assert [p.overlay.isVisible() for p in wall.panes] == [p is pane for p in wall.panes]
+            assert not pane.entry.isVisible()
+            assert pane.reload_button.isVisible()
+            assert pane.overlay.width() <= pane.width() - 12
+            bounds = QRect(pane.mapToGlobal(QPoint()), pane.size())
+            assert bounds.contains(pane.overlay.geometry()), (bounds, pane.overlay.geometry())
+        wall.restore()
+        app.processEvents()
+        for pane in wall.panes[:2]:
+            assert pane.entry.isVisible()
+            assert not pane.reload_button.isVisible()
+    finally:
         wall.close()

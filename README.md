@@ -79,13 +79,16 @@ installs the browser version that matches it.
    Streamwall to close the associated browser, worker, and local relay.
 3. Use **Audio on/off** and each pane's volume slider. **Solo audio** automatically
    mutes other panes when you enable one. Uncheck it to mix several streams.
-4. **Expand** fills the wall with one pane while other loaded streams keep running.
+4. **Expand** fills the wall with one pane and selects its audio while other loaded streams keep running.
    **F11** makes the window fullscreen; combine these for a single fullscreen
    stream. **Esc** restores the grid and exits fullscreen.
 5. Fullscreen removes all reserved control areas and outer margins. Videos have
    **2 logical pixels of spacing** between them. Move the mouse to reveal floating
-   controls; they fade out after about 2 seconds without mouse/keyboard activity.
-   Buttons remain compact in normal windowed mode. Source aspect ratios are
+   controls for the quadrant under the pointer; only one pane's controls appear
+   at a time, preventing overlap. They fade out after about 2 seconds without
+   mouse/keyboard activity. Fullscreen hides URL fields and provides a compact
+   **Reload** button; leave fullscreen to edit URLs. Buttons remain compact in
+   normal windowed mode. Source aspect ratios are
    preserved, so VLC may still letterbox video within its pane.
 6. **Pause** toggles pause/resume for VLC; the source browser keeps the live feed
    current. A long pause may outlive the rolling buffer, so Load again to reconnect
@@ -98,6 +101,33 @@ For a direct `.m3u8` URL, no browser is needed. Ordinary detected HLS URLs can
 also use the HTTP relay, allowing the browser to close after discovery. Uncheck
 **Show browser** to try automatic playback without a visible window. Some sites
 need a real player click, so visible browser mode is recommended first.
+
+### Keyboard and double-click controls
+
+Shortcuts work while Streamwall has focus, including its floating controls.
+They do not intercept digits typed into a URL or other text field, dialogs,
+modified shortcuts, or open dropdowns. Keys for panes outside the selected
+1–4 pane count are ignored. Holding a key does not repeatedly toggle it.
+
+| Key / action | Result |
+| --- | --- |
+| `1`, `2`, `3`, `4` | Select only that quadrant's audio, even with Solo audio unchecked. |
+| `0` | Mute all; press again to restore the last selected audio source. |
+| `5`, `6`, `7`, `8` | Zoom quadrant 1, 2, 3, or 4 and select its audio. Enter fullscreen if needed. |
+| Same zoom key again | Return to the selected pane grid, staying fullscreen and preserving audio/mute. |
+| Double-click video while fullscreen | Zoom that quadrant and select its audio; double-click again to restore the grid without changing audio/mute. |
+| `F11` | Toggle window fullscreen. |
+| `Esc` | Restore the grid and leave fullscreen. |
+
+Zooming changes the view and audio selection; it does not restart other streams.
+If you muted with `0` while zoomed, returning to the grid keeps that mute state.
+`0` then restores the last selected source. A source removed by reducing the pane
+count is not restored by the mute shortcut.
+
+The fullscreen input layer receives double-clicks above VLC's native X11 video
+windows. Both it and the compact controls are positioned within the fullscreen
+canvas, rather than being moved into a desktop dock's smaller work area. They
+hide when another application takes focus.
 
 ### How browser-assisted playback works
 
@@ -174,11 +204,14 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `STREAMWALL_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **18 tests passed on Python 3.12 and 3.14** with
+Current development validation: **22 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
 Stop/reload cleanup, fullscreen 2-pixel geometry, and fading/revealing controls.
+UI tests also cover number/keypad shortcuts, URL editing protection, remembered
+mute state, zoom/audio round trips, fullscreen double-click input, and two-pane
+hover controls that stay within their pane and never appear simultaneously.
 Browser install dry runs verify download selection for Ubuntu 22.04,
 24.04 and 26.04 x64 without downloading browsers or changing system packages.
 This does not constitute a full install on each Ubuntu version. Qt control tests
@@ -197,6 +230,11 @@ Host smoke test:
   the chosen VLC pane. Restore the source browser if another interaction is needed.
 - Move the mouse in fullscreen, wait about 2 seconds, and check that controls fade
   without moving/resizing the video. Test F11/Esc while a floating control has focus.
+- With two panes fullscreen, move between them: verify only the hovered pane's
+  compact controls appear, fit inside it, and remain clickable above native video.
+- Test `1–4`, `0`, and `5–8`; double-click native video to zoom and return to the
+  grid. Check the viewed source retains audio and explicit mute stays muted.
+- Type a URL containing digits: verify shortcuts do not interrupt editing.
 - Stop/reload a pane during playback and discovery; verify its browser exits.
 - Keep a session playing long enough to exercise the site's authorization renewal.
 
