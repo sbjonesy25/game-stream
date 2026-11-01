@@ -7,7 +7,7 @@ The normal viewing window does not embed the source website.
 
 ## Install on Ubuntu
 
-Ubuntu 22.04 / 24.04 or newer, Python 3.10+, and a desktop session are the intended
+Ubuntu 22.04 / 24.04 or newer, Python 3.10–3.15, and a desktop session are the intended
 host. Allow a few hundred MB for Qt, Chromium, and VLC. Four HD streams can use
 substantial bandwidth and CPU/GPU resources.
 
@@ -30,10 +30,30 @@ Manual equivalent:
 sudo apt-get update
 sudo apt-get install -y python3-venv vlc libvlc5 libxcb-cursor0 libxcb-xinerama0 libxkbcommon-x11-0
 python3 -m venv .venv
+.venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e '.[test]'
 .venv/bin/python -m playwright install --with-deps chromium
 ./scripts/run.sh
 ```
+
+### Python version / PySide6 installation errors
+
+If setup reports `No matching distribution found for PySide6==6.8.3`, update this
+checkout with `git pull` and rerun `./scripts/setup-ubuntu.sh`. That old pin did
+not support Python 3.14. The project now allows PySide6 6.10.1 or newer within
+Qt 6, so pip can select a release compatible with your Python version.
+
+Setup upgrades pip inside the virtual environment and prints its Python version.
+You can choose an installed interpreter explicitly:
+
+```bash
+PYTHON_BIN=python3.14 ./scripts/setup-ubuntu.sh
+```
+
+If `.venv` already uses a different Python version, setup stops before changing
+system packages. Rename that virtual environment to a backup, then rerun setup
+to create a fresh one. For a non-default interpreter, install its corresponding
+venv package (for example `python3.14-venv`) if Ubuntu reports missing `ensurepip`.
 
 ## Use
 
@@ -109,8 +129,9 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `STREAMWALL_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **10 tests passed**, including Chromium discovery
-and FFmpeg decoding. Qt control tests use a mock VLC instance: native VLC video
+Current development validation: **10 tests passed on Python 3.12 and 3.14** with
+PySide6 6.12.0, including Chromium discovery and FFmpeg decoding. Qt control tests
+use a mock VLC instance: native VLC video
 embedding, real audio output, and GPU playback still need the Ubuntu host smoke
 test below. This cloud machine lacks libVLC and cannot install system packages.
 
