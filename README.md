@@ -55,6 +55,16 @@ system packages. Rename that virtual environment to a backup, then rerun setup
 to create a fresh one. For a non-default interpreter, install its corresponding
 venv package (for example `python3.14-venv`) if Ubuntu reports missing `ensurepip`.
 
+### Playwright browser installation on Ubuntu 26.04
+
+If Python packages install but browser setup reports `Playwright does not support
+chromium on ubuntu26.04-x64`, run `git pull` and rerun
+`./scripts/setup-ubuntu.sh`. The original Playwright 1.51.0 pin predates this OS;
+the project now uses 1.64.1, which includes Ubuntu 26.04 browser and dependency
+definitions. Setup prints the installed Playwright version before installing
+Chromium. Keep the existing `.venv`; rerunning setup upgrades the package and
+installs the browser version that matches it.
+
 ## Use
 
 1. Choose **1–4 panes**. Paste a link into a pane and press **Load** or Enter.
@@ -129,8 +139,11 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `STREAMWALL_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **10 tests passed on Python 3.12 and 3.14** with
-PySide6 6.12.0, including Chromium discovery and FFmpeg decoding. Qt control tests
+Current development validation: **13 tests passed on Python 3.12 and 3.14** with
+PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
+decoding. Browser install dry runs verify download selection for Ubuntu 22.04,
+24.04 and 26.04 x64 without downloading browsers or changing system packages.
+This does not constitute a full install on each Ubuntu version. Qt control tests
 use a mock VLC instance: native VLC video
 embedding, real audio output, and GPU playback still need the Ubuntu host smoke
 test below. This cloud machine lacks libVLC and cannot install system packages.

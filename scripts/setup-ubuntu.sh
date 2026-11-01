@@ -23,5 +23,6 @@ fi
 .venv/bin/python --version
 .venv/bin/python -m pip install --upgrade pip
 .venv/bin/python -m pip install -e '.[test]'
+.venv/bin/python -m playwright --version
 .venv/bin/python -m playwright install --with-deps chromium
 printf '\nSetup complete. Run ./scripts/run.sh\n'
