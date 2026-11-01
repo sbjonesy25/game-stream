@@ -2,7 +2,8 @@
 
 An Ubuntu desktop app for watching one to four HLS streams in a PySide6 window.
 Paste a **web page URL** or a direct **`.m3u8` URL** into each pane. Chromium
-looks for HLS network responses, then VLC plays just the video in the wall.
+can relay decoded MPEG-TS fragments from Hls.js/Clappr players or discover
+ordinary HLS URLs, then VLC plays just the video in the wall.
 The normal viewing window does not embed the source website.
 
 ## Install on Ubuntu
@@ -67,63 +68,97 @@ installs the browser version that matches it.
 
 ## Use
 
-1. Choose **1–4 panes**. Paste a link into a pane and press **Load** or Enter.
-2. Each stream starts muted. Use **Audio on/off** and its volume slider.
-   **One audio source** automatically mutes other panes when you enable one.
-   Uncheck it to mix several streams.
-3. **Expand** fills the wall with one pane while other loaded streams keep running.
+1. Leave **Show browser** enabled (the default), choose **1–4 panes**, paste a
+   page link, and press **Load** or Enter.
+2. In the Chromium window, complete ordinary login/consent prompts and press
+   **Play**. Wait for a few video segments to buffer (usually 10–20 seconds).
+   With a supported Hls.js/Clappr MPEG-TS player, video starts in the app and the
+   source browser minimizes automatically when the window manager permits it.
+   **Keep that browser open**: it handles stream renewals and decoding the site's
+   transport. The browser is muted; VLC owns the audible output. Stop or close
+   Streamwall to close the associated browser, worker, and local relay.
+3. Use **Audio on/off** and each pane's volume slider. **Solo audio** automatically
+   mutes other panes when you enable one. Uncheck it to mix several streams.
+4. **Expand** fills the wall with one pane while other loaded streams keep running.
    **F11** makes the window fullscreen; combine these for a single fullscreen
    stream. **Esc** restores the grid and exits fullscreen.
-4. **Pause / resume** and **Stop** operate independently. Reducing the pane count
-   stops and mutes removed panes. Links remain in their input fields.
-5. Press **Load** again to rediscover an expired or disconnected stream.
+5. Fullscreen removes all reserved control areas and outer margins. Videos have
+   **2 logical pixels of spacing** between them. Move the mouse to reveal floating
+   controls; they fade out after about 2 seconds without mouse/keyboard activity.
+   Buttons remain compact in normal windowed mode. Source aspect ratios are
+   preserved, so VLC may still letterbox video within its pane.
+6. **Pause** toggles pause/resume for VLC; the source browser keeps the live feed
+   current. A long pause may outlive the rolling buffer, so Load again to reconnect
+   if needed. **Stop** stops the pane and its source browser. Reducing the pane
+   count also stops and mutes removed panes. Links stay in their input fields.
+7. Press **Load** again to restart an expired/disconnected session. A replacement
+   browser starts after the previous worker has finished shutting down.
 
-### Cookies and player interaction
+For a direct `.m3u8` URL, no browser is needed. Ordinary detected HLS URLs can
+also use the HTTP relay, allowing the browser to close after discovery. Uncheck
+**Show browser** to try automatic playback without a visible window. Some sites
+need a real player click, so visible browser mode is recommended first.
 
-Try normal loading first. If the page requires a login, consent, or a manual
-player click, enable **Show resolver browser** before loading. You can interact
-with that temporary Chromium window. It closes when an HLS response is found or
-after the discovery timeout (about 75 seconds). Advertising popup tabs close
-automatically. The wall itself displays only video.
+### How browser-assisted playback works
 
-You can also select a **Netscape-format `cookies.txt`** file using **Import
-cookies…**. Export it yourself from a browser session you control; the app does
-not extract browser databases or passwords. Cookies are imported for subsequent
-loads, scoped to their domains/paths, and combined with cookies acquired during
-page discovery. Session cookies with expiry `0` are supported. Do not commit or
-share cookie files. Imported cookies can grant account access.
+The supplied network log showed a JSON live index and image-labelled media
+responses that the site's own player unwraps into MPEG-TS. There is no normal
+`.m3u8` network request for the original resolver to detect. Cookie import alone
+does not address that transport.
 
-Each stream gets an independent browser context and loopback relay. Captured
-Referer, Origin, User-Agent and same-origin Authorization headers accompany
-playback requests. Playlists (including nested variants), media segments, HLS
-keys, and initialization segments pass through the relay. Signed query strings
-are preserved. Cookies are domain scoped; Authorization is not forwarded to
-other origins. Relays bind only to `127.0.0.1` on random ports and use random
-resource identifiers. Cookie values and signed URLs are not written to app logs.
-Credentials remain in memory until the stream is stopped. **Clear cookies**
-clears the selected import file for future loads; stop existing streams to discard
-their active sessions. The original cookie file is not deleted or modified.
+An init script runs in the source page and its frames, observes Hls.js/Clappr
+clear MPEG-TS fragment events, and copies complete segments before the player
+transfers their buffers. The browser continues fetching and decoding with its
+own session. A bounded in-memory loopback relay exposes those segments as a
+normal rolling HLS stream for VLC. It does not copy the website into the app,
+reverse-engineer the site's decoder, record streams to disk, or extract DRM keys.
+Each pane has an independent browser and relay. The first supported media player
+in that session supplies its relay; other players cannot mix fragments into it.
+The buffer retains at most 12 segments and 64 MiB per pane.
+
+This mode keeps both Chromium and VLC active, so four HD streams can use more
+CPU/GPU memory than four direct HLS URLs. Minimize the source windows rather
+than closing them. The app disables browser background throttling and keeps
+source video muted to avoid duplicate audio.
+
+### Importing cookies
+
+Select a **Netscape-format `cookies.txt`** file using **Cookies…**. Export it
+yourself from a browser session you control; the app does not extract browser
+databases or passwords. Cookies apply to subsequent loads, scoped to their
+paths/domains. Brave's profile is not shared automatically. Session cookies with
+expiry `0` are supported. Do not commit or share cookie files.
+
+For ordinary HLS, captured Referer, Origin, User-Agent and same-origin
+Authorization headers accompany relay requests. Nested playlists, media, keys,
+and initialization segments pass through that relay. Signed query strings are
+preserved, cookies stay domain scoped, and Authorization does not cross origins.
+Both relay types bind only to `127.0.0.1` on random ports with random resource
+paths. Cookie values and signed upstream URLs are not written to app logs.
+**Clear cookies** clears the selected import file for future loads; stop existing
+streams to discard active sessions. The original file stays untouched.
 
 ### Compatibility limits
 
-This is a first implementation, not a guarantee that every streaming website
-works. The resolver chooses the first successful HLS response; sites that serve
-an HLS advertisement first may need site-specific selection logic. It does not
-support DRM/EME video, DASH-only players, CAPTCHA solving, paywall bypasses, or
-browser-bound authentication that cannot be replayed by an HTTP client. TLS
-verification remains enabled. Use streams you are authorized to access.
+Browser bridging currently supports **Hls.js/Clappr players emitting clear,
+complete MPEG-TS fragments**. It does not handle DRM/EME, DASH-only players,
+CMAF/fMP4 fragments, or separate audio-only tracks through the browser bridge.
+Ordinary HLS still uses the existing HTTP relay where compatible. No CAPTCHA
+solving or paywall bypass is provided. TLS verification remains enabled.
 
-Some players require ongoing browser heartbeats, fresh cookies, rotating tokens,
-or anti-bot browser fingerprints. The browser closes after discovery, so those
-sources may fail or expire; reload to get a fresh session. Pausing a live stream
-for a long time can also outlive the server's live window. Browser mode lets you
-complete ordinary login/player interactions but cannot guarantee compatibility.
-A page may be offline, geo-restricted, or no longer associated with a live event.
+A page with an HLS advertisement before its main player may select the wrong
+source. Pages can change their player APIs, lose connectivity, expire their
+session, or require another interaction in the source browser. When the source
+stalls, restore its browser and check playback, or press Load again. Closing the
+source browser stops the relay. Use streams you are authorized to access.
 
-The supplied `v2.streameast.ga` example was **not validated**: the development
-cloud's egress proxy returned HTTP 403 before reaching the site. No environment
-network settings were changed. Try that URL on your Ubuntu host; a failure there
-needs diagnosis from the actual site's response.
+Live access to the supplied site remains blocked by the development cloud's
+egress policy. **Offline replay of the user's captured responses succeeded:**
+Chromium ran the recorded player, the bridge delivered changing segments, and
+FFmpeg decoded 16 seconds / 954 video frames through the new relay. The private
+HAR, tokens, media, and site decoder code are not part of this repository.
+This demonstrates the recorded transport, not a live test of current URLs or
+long-running session renewal. No environment network settings were changed.
 
 ## Development and validation
 
@@ -139,9 +174,12 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `STREAMWALL_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **13 tests passed on Python 3.12 and 3.14** with
+Current development validation: **18 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
-decoding. Browser install dry runs verify download selection for Ubuntu 22.04,
+decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
+continued fragment delivery after handoff, bounded relay memory, discontinuities,
+Stop/reload cleanup, fullscreen 2-pixel geometry, and fading/revealing controls.
+Browser install dry runs verify download selection for Ubuntu 22.04,
 24.04 and 26.04 x64 without downloading browsers or changing system packages.
 This does not constitute a full install on each Ubuntu version. Qt control tests
 use a mock VLC instance: native VLC video
@@ -154,7 +192,12 @@ Host smoke test:
 - Load four independent streams, switch audible panes, and verify volume/mute.
 - Expand one pane, press F11, then Esc; check the grid returns.
 - Reduce from four panes to one; check hidden streams stop and are silent.
-- Try your source page with browser mode and cookies as needed; stop/close the
-  app during resolution and confirm the temporary browsers exit.
+- With **Show browser** enabled, load your source page and press Play. Confirm
+  video reaches the app, the source window minimizes, and audio comes only from
+  the chosen VLC pane. Restore the source browser if another interaction is needed.
+- Move the mouse in fullscreen, wait about 2 seconds, and check that controls fade
+  without moving/resizing the video. Test F11/Esc while a floating control has focus.
+- Stop/reload a pane during playback and discovery; verify its browser exits.
+- Keep a session playing long enough to exercise the site's authorization renewal.
 
 No environment draft or publication settings are changed by this project.

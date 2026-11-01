@@ -17,3 +17,6 @@ streamwall = "streamwall.app:main"
 
 [tool.setuptools.packages.find]
 include = ["streamwall*"]
+
+[tool.setuptools.package-data]
+streamwall = ["*.js"]

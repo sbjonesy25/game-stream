@@ -1,4 +1,4 @@
-"""Discover HLS requests in a disposable Chromium session."""
+"""Discover ordinary HLS or keep a browser session relaying decoded media."""
 from dataclasses import dataclass, field
 from http.cookiejar import MozillaCookieJar
 from threading import Event
@@ -7,6 +7,7 @@ from time import time
 from urllib.parse import urlsplit
 import os
 import shutil
+from pathlib import Path
 
 
 @dataclass
@@ -14,6 +15,7 @@ class Source:
     url: str
     headers: dict = field(default_factory=dict)
     cookies: list = field(default_factory=list)
+    relay: object = field(default=None, repr=False)
 
 
 def validate_url(url):
@@ -40,61 +42,110 @@ def load_cookies(path):
     return result
 
 
-def resolve(url, cookie_file='', visible=False, cancel=None, timeout=75):
+def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
+            on_ready=None, on_status=None):
+    """With on_ready, run a browser bridge until cancellation; otherwise discover HLS."""
     from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout
+    from .bridge import BrowserRelay
     validate_url(url)
     cookies = load_cookies(cookie_file)
     if urlsplit(url).path.lower().endswith('.m3u8'):
-        return Source(url, cookies=cookies)
+        source = Source(url, cookies=cookies)
+        if on_ready:
+            on_ready(source)
+        return source
     cancel = cancel or Event()
     with sync_playwright() as p:
         executable = os.environ.get('STREAMWALL_CHROMIUM')
         if not executable and not os.path.exists(p.chromium.executable_path):
             executable = shutil.which('chromium') or shutil.which('chromium-browser')
         browser = p.chromium.launch(executable_path=executable, headless=not visible,
-                                    args=['--autoplay-policy=no-user-gesture-required'])
+            args=['--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
+                  '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'])
+        bridge = None
+        announced = False
         try:
             context = browser.new_context()
             if cookies:
                 context.add_cookies(cookies)
+            if on_ready:
+                def fragment(binding, message):
+                    nonlocal bridge
+                    if cancel.is_set() or not isinstance(message, dict):
+                        return
+                    if bridge is None:
+                        bridge = BrowserRelay()
+                    bridge.push((binding['frame'], message.get('player')), message)
+                context.expose_binding('__streamwall_fragment', fragment)
+                context.add_init_script(path=str(Path(__file__).with_name('browser_bridge.js')))
             page = context.new_page()
-            # Do not allow advertising popups to accumulate.
             context.on('page', lambda popup: popup.close())
             found = []
 
             def inspect(response):
                 mime = response.headers.get('content-type', '').lower()
-                if response.ok and ('.m3u8' in urlsplit(response.url).path.lower() or
+                if not found and response.ok and ('.m3u8' in urlsplit(response.url).path.lower() or
                                     'mpegurl' in mime):
-                    found.append(response)
+                    found.append((response, monotonic()))
 
             page.on('response', inspect)
             deadline = monotonic() + timeout
             try:
                 page.goto(url, wait_until='domcontentloaded', timeout=30000)
             except BrowserTimeout:
-                pass  # Some live pages never finish loading; inspect their requests.
+                pass
             last_click = 0
-            while not cancel.is_set() and monotonic() < deadline:
-                if found:
-                    response = found[0]
+            while not cancel.is_set():
+                if page.is_closed():
+                    raise RuntimeError('The source browser was closed. Load again and leave it running during playback.')
+                if bridge and bridge.ready and not announced:
+                    announced = True
+                    source = Source(bridge.url, relay=bridge)
+                    on_ready(source)
+                    if on_status:
+                        on_status('Browser relay connected — keep the source browser running')
+                    if visible:
+                        try:
+                            session = context.new_cdp_session(page)
+                            window = session.send('Browser.getWindowForTarget')
+                            session.send('Browser.setWindowBounds', {
+                                'windowId': window['windowId'], 'bounds': {'windowState': 'minimized'}})
+                            session.detach()
+                        except Exception:
+                            pass  # Window managers may not support minimizing via CDP.
+                if not announced and found and (not on_ready or (bridge is None and monotonic() - found[0][1] > 4)):
+                    response = found[0][0]
                     headers = response.request.all_headers()
                     kept = {k: v for k, v in headers.items()
                             if k.lower() in ('referer', 'origin', 'user-agent', 'authorization')}
-                    return Source(response.url, kept, context.cookies())
-                # Try actual player controls, including embedded iframe players.
-                if monotonic() - last_click > 5:
+                    source = Source(response.url, kept, context.cookies())
+                    if on_ready:
+                        on_ready(source)
+                    return source  # Ordinary HLS does not need the browser bridge.
+                if not announced and monotonic() > deadline:
+                    raise RuntimeError('No supported video detected. In browser mode, press Play and wait for video. '
+                                       'Supported players: HLS URLs and Hls.js/Clappr MPEG-TS. DRM and DASH are unsupported.')
+                # Never click a playing video: that would pause the source. In visible
+                # mode the user controls Play/login; headless mode tries player controls.
+                if not visible and not announced and monotonic() - last_click > 5:
                     for frame in page.frames:
-                        for selector in ('video', '.vjs-big-play-button', '.jw-icon-playback',
-                                         'button[aria-label="Play"]'):
+                        try:
+                            frame.evaluate("""() => { for (const v of document.querySelectorAll('video')) {
+                                v.muted = true; if (v.paused) v.play().catch(() => {});
+                            }}""")
+                        except Exception:
+                            continue
+                        for selector in ('.vjs-big-play-button', '.jw-icon-display',
+                                         '.play-wrapper', 'button[aria-label="Play"]'):
                             try:
-                                frame.locator(selector).first.click(timeout=250)
+                                frame.locator(selector).first.click(timeout=150)
                             except Exception:
                                 pass
                     last_click = monotonic()
-                page.wait_for_timeout(200)
-            if cancel.is_set():
+                page.wait_for_timeout(150)
+            if not announced:
                 raise RuntimeError('Cancelled')
-            raise RuntimeError('No HLS stream detected. Try browser mode, import cookies, or use a direct .m3u8 URL.')
         finally:
             browser.close()
+            if bridge:
+                bridge.close()
