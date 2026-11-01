@@ -5,8 +5,8 @@ from time import monotonic
 
 # libVLC embeds into an X11 window; XWayland supports this on Ubuntu Wayland.
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEvent, QPoint, QRect
-from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEvent, QPoint, QRect, QByteArray
+from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
     QPushButton, QSlider, QVBoxLayout, QWidget, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, 
 from .proxy import Relay
 from .bridge import BrowserRelay
 from .resolver import resolve, validate_url
+from .branding import APP_ID, DISPLAY_NAME, ICON_PATH, configure_application
 
 
 class FloatingBar(QFrame):
@@ -113,6 +114,7 @@ class Pane(QFrame):
         self.number = number
         self.worker = None
         self.pending_reload = False
+        self.want_playing = False
         self.relay = None
         self.player = wall.vlc.media_player_new()
         self.player.audio_set_mute(True)
@@ -141,6 +143,7 @@ class Pane(QFrame):
         self.full = QPushButton('Expand')
         self.full.clicked.connect(lambda: wall.expand(self))
         self.url = QLineEdit()
+        self.url.setMaxLength(16384)
         self.url.setPlaceholderText('Paste a page link or direct .m3u8 URL')
         self.url.returnPressed.connect(self.load)
         entry.addWidget(self.url, 1)
@@ -212,6 +215,8 @@ class Pane(QFrame):
         if self.worker is not None:
             self.stop()
             self.pending_reload = True
+            self.want_playing = True
+            self.wall.session_changed()
             self.load_button.setEnabled(False)
             self.status.setText('Restarting source browser…')
             return
@@ -221,6 +226,8 @@ class Pane(QFrame):
             self.status.setText(str(exc))
             return
         self.stop()
+        self.want_playing = True
+        self.wall.session_changed()
         self.status.setText('Open the source player and press Play. Waiting for video…')
         self.load_button.setEnabled(False)
         self.worker = ResolverWorker(self.url.text().strip(), self.wall.cookie_path,
@@ -279,6 +286,7 @@ class Pane(QFrame):
             self.status.setText(labels[state])
 
     def stop(self):
+        self.want_playing = False
         self.pending_reload = False
         if self.worker:
             self.worker.cancel.set()
@@ -287,6 +295,7 @@ class Pane(QFrame):
             self.relay.close()
             self.relay = None
         self.status.setText('Stopped')
+        self.wall.session_changed()
 
     def dispose(self):
         self.stop()
@@ -297,13 +306,15 @@ class Wall(QMainWindow):
     def __init__(self, instance):
         super().__init__()
         self.vlc = instance
+        self.recovery = None
         self.cookie_path = ''
         self.expanded = None
         self.closing = False
         self.immersive = False
         self.last_audio = None
         self.hovered_pane = None
-        self.setWindowTitle('Streamwall')
+        self.setWindowTitle(DISPLAY_NAME)
+        self.setWindowIcon(QIcon(str(ICON_PATH)))
         self.resize(1280, 850)
         self.root = QWidget()
         self.setCentralWidget(self.root)
@@ -314,7 +325,7 @@ class Wall(QMainWindow):
         tools = QHBoxLayout(self.tools)
         tools.setContentsMargins(2, 2, 2, 2)
         tools.setSpacing(6)
-        tools.addWidget(QLabel('Streamwall'))
+        tools.addWidget(QLabel('Game Stream'))
         tools.addStretch()
         tools.addWidget(QLabel('Panes'))
         self.count = QComboBox()
@@ -359,6 +370,46 @@ class Wall(QMainWindow):
         self.pointer_timer.timeout.connect(self.poll_pointer)
         self.pointer_timer.start(100)
         QApplication.instance().installEventFilter(self)
+
+    def session_changed(self):
+        if self.recovery:
+            self.recovery.changed()
+
+    def session_snapshot(self):
+        return dict(version=1, pane_count=self.count.currentIndex() + 1,
+            panes=[dict(url=p.url.text(), volume=p.volume.value(), audio=p.audio.isChecked(),
+                        active=p.want_playing) for p in self.panes],
+            solo_audio=self.solo.isChecked(), show_browser=self.browser.isChecked(),
+            last_audio=self.panes.index(self.last_audio) if self.last_audio else None,
+            expanded=self.panes.index(self.expanded) if self.expanded else None,
+            fullscreen=self.isFullScreen(), geometry=bytes(self.saveGeometry().toBase64()).decode('ascii'),
+            cookie_file=self.cookie_path)
+
+    def apply_session(self, snapshot):
+        from pathlib import Path
+        self.count.setCurrentIndex(snapshot['pane_count'] - 1)
+        self.solo.setChecked(False)
+        self.browser.setChecked(snapshot['show_browser'])
+        for pane, row in zip(self.panes, snapshot['panes']):
+            pane.url.setText(row['url'])
+            pane.volume.setValue(row['volume'])
+            pane.audio.setChecked(row['audio'])
+        self.last_audio = self.panes[snapshot['last_audio']] if snapshot['last_audio'] is not None else None
+        self.solo.setChecked(snapshot['solo_audio'])
+        if snapshot['cookie_file'] and Path(snapshot['cookie_file']).is_file():
+            self.cookie_path = snapshot['cookie_file']
+            self.cookies.setText('Cookies selected')
+        if snapshot['geometry']:
+            self.restoreGeometry(QByteArray.fromBase64(snapshot['geometry'].encode('ascii')))
+        if snapshot['fullscreen']:
+            self.showFullScreen()
+        elif self.isFullScreen():
+            self.showNormal()
+        if snapshot['expanded'] is not None:
+            self.expand(self.panes[snapshot['expanded']], select_audio=False)
+        for pane, row in zip(self.panes[:snapshot['pane_count']], snapshot['panes']):
+            if row['active'] and row['url'].strip():
+                pane.load()
 
     def eventFilter(self, watched, event):
         owned = isinstance(watched, QWidget) and watched.window() in self.owned_windows()
@@ -545,10 +596,12 @@ class Wall(QMainWindow):
             self.cookie_path = path
             self.cookies.setText('Cookies selected')
             self.cookies.setToolTip('Used on the next Load; cookie values stay in memory.')
+            self.session_changed()
 
     def clear_cookies(self):
         self.cookie_path = ''
         self.cookies.setText('Cookies…')
+        self.session_changed()
 
     def arrange(self, *_):
         self.expanded = None
@@ -571,13 +624,14 @@ class Wall(QMainWindow):
         if self.immersive:
             QTimer.singleShot(0, self.show_controls)
 
-    def expand(self, pane):
+    def expand(self, pane, select_audio=True):
         if not self.pane_enabled(pane):
             return
         if self.expanded is pane:
             self.arrange()
             return
-        self.select_audio(pane)
+        if select_audio:
+            self.select_audio(pane)
         self.expanded = pane
         for other in self.panes:
             self.grid.removeWidget(other)
@@ -598,6 +652,8 @@ class Wall(QMainWindow):
             self.showNormal()
 
     def closeEvent(self, event):
+        if not self.closing and self.recovery:
+            self.recovery.before_close()
         self.closing = True
         self.video_input.hide()
         self.tools_overlay.hide()
@@ -607,7 +663,7 @@ class Wall(QMainWindow):
             pane.stop()
         if any(pane.worker and pane.worker.isRunning() for pane in self.panes):
             event.ignore()
-            self.setWindowTitle('Streamwall — closing resolver browsers…')
+            self.setWindowTitle('Game Stream — closing source browsers…')
             QTimer.singleShot(300, self.close)
             return
         for pane in self.panes:
@@ -615,12 +671,16 @@ class Wall(QMainWindow):
         QApplication.instance().removeEventFilter(self)
         self.pointer_timer.stop()
         self.idle.stop()
+        if self.recovery:
+            self.recovery.after_close()
         self.vlc.release()
         event.accept()
 
 
 def main():
-    app = QApplication(sys.argv)
+    os.environ.setdefault('RESOURCE_NAME', APP_ID)
+    app = QApplication([sys.argv[0], '-name', APP_ID, *sys.argv[1:]])
+    configure_application(app)
     try:
         import vlc
         instance = vlc.Instance('--no-video-title-show', '--quiet')
@@ -641,6 +701,9 @@ def main():
     ''')
     wall = Wall(instance)
     wall.show()
+    from .recovery import SessionRecovery
+    recovery = SessionRecovery(wall)
+    QTimer.singleShot(0, recovery.start)
     return app.exec()
 
 

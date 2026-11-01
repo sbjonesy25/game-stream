@@ -9,8 +9,8 @@ import time
 import pytest
 import requests
 
-from streamwall.bridge import BrowserRelay
-from streamwall.resolver import resolve
+from game_stream.bridge import BrowserRelay
+from game_stream.resolver import resolve
 from test_streams import serve
 
 

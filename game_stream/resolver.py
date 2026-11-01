@@ -56,7 +56,7 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
         return source
     cancel = cancel or Event()
     with sync_playwright() as p:
-        executable = os.environ.get('STREAMWALL_CHROMIUM')
+        executable = os.environ.get('GAME_STREAM_CHROMIUM') or os.environ.get('STREAMWALL_CHROMIUM')
         if not executable and not os.path.exists(p.chromium.executable_path):
             executable = shutil.which('chromium') or shutil.which('chromium-browser')
         browser = p.chromium.launch(executable_path=executable, headless=not visible,
@@ -76,7 +76,7 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                     if bridge is None:
                         bridge = BrowserRelay()
                     bridge.push((binding['frame'], message.get('player')), message)
-                context.expose_binding('__streamwall_fragment', fragment)
+                context.expose_binding('__game_stream_fragment', fragment)
                 context.add_init_script(path=str(Path(__file__).with_name('browser_bridge.js')))
             page = context.new_page()
             context.on('page', lambda popup: popup.close())

@@ -5,7 +5,7 @@ python_bin="${PYTHON_BIN:-python3}"
 "$python_bin" - <<'PY'
 import sys
 if not (3, 10) <= sys.version_info[:2] < (3, 16):
-    sys.exit('Streamwall requires Python 3.10–3.15. Select one with PYTHON_BIN=python3.14 ./scripts/setup-ubuntu.sh')
+    sys.exit('Game Stream requires Python 3.10–3.15. Select one with PYTHON_BIN=python3.14 ./scripts/setup-ubuntu.sh')
 PY
 if [[ -x .venv/bin/python ]]; then
     expected_version="$("$python_bin" -c 'import sys; print(sys.version_info[:2])')"
@@ -22,7 +22,11 @@ if [[ ! -x .venv/bin/python ]]; then
 fi
 .venv/bin/python --version
 .venv/bin/python -m pip install --upgrade pip
+if .venv/bin/python -m pip show streamwall >/dev/null 2>&1; then
+    .venv/bin/python -m pip uninstall -y streamwall
+fi
 .venv/bin/python -m pip install -e '.[test]'
 .venv/bin/python -m playwright --version
 .venv/bin/python -m playwright install --with-deps chromium
-printf '\nSetup complete. Run ./scripts/run.sh\n'
+./scripts/install-desktop.sh
+printf '\nSetup complete. Launch Game Stream from Applications or run ./scripts/run.sh\n'

@@ -1,1 +1,0 @@
-"""Streamwall desktop viewer."""

@@ -1,4 +1,4 @@
-# Streamwall
+# Game Stream
 
 An Ubuntu desktop app for watching one to four HLS streams in a PySide6 window.
 Paste a **web page URL** or a direct **`.m3u8` URL** into each pane. Chromium
@@ -21,7 +21,8 @@ From this project directory:
 
 Setup uses `sudo` for Ubuntu packages, creates a project `.venv`, installs the
 Python dependencies, and installs Playwright Chromium with its Linux libraries.
-It does not change your browser profile. On a Wayland desktop, the launcher uses
+It also installs a per-user application launcher and icon. It does not change
+browser profiles or dock favorites. On a Wayland desktop, the launcher uses
 XWayland (`QT_QPA_PLATFORM=xcb`) because VLC requires an X11 embedding window.
 If XWayland is unavailable, use an Ubuntu on Xorg session.
 
@@ -36,6 +37,66 @@ python3 -m venv .venv
 .venv/bin/python -m playwright install --with-deps chromium
 ./scripts/run.sh
 ```
+
+### Launch from Applications and pin to the taskbar
+
+The app is now **Game Stream**, with the package/command and desktop ID
+`game-stream`. Its window, Applications entry, dock grouping and generated icon
+use that identity.
+
+For an existing checkout with a working `.venv`, close the app and run:
+
+```bash
+git pull
+./scripts/install-desktop.sh
+```
+
+Open Ubuntu **Applications**, search **Game Stream**, and launch it. Right-click
+its dock icon and choose **Pin to Dash** / **Add to Favorites** (the wording varies
+by Ubuntu version). You can also pin its Applications entry. This last pinning
+step is done on your desktop; the installer preserves existing favorites.
+
+The installer needs no sudo and can be rerun. It creates
+`~/.local/share/applications/game-stream.desktop` and hicolor icons from 16 to
+512 pixels, respecting `XDG_DATA_HOME` when configured. The shortcut uses the
+checkout's absolute launcher path, so spaces are supported and a terminal is not
+required. Keep the checkout and `.venv` in place; rerun the installer after moving
+them. `StartupWMClass`, Qt's desktop ID, and the X11 application name are all
+`game-stream`, so the running window groups under the pinned icon on Ubuntu.
+
+`./scripts/run.sh` still works directly after `git pull`, even before reinstalling
+Python package metadata. A fresh setup installs the `.venv/bin/game-stream`
+command and removes the obsolete `streamwall` package/console entry if present.
+The Python module is now `game_stream`.
+
+### Restore after closing or crashing
+
+On the next launch, **Restore last session?** offers to restore saved links,
+pane count, fullscreen/expanded layout, window geometry, per-pane volumes,
+audio/mute selection, Solo audio, and Show browser settings. Choose **Yes** to
+reconnect only streams that were active or loading. Links in stopped panes are
+restored without starting them. Choose **No** to start a fresh session.
+
+Settings checkpoint after edits (about 300 ms), periodically (about 2 seconds),
+and before shutdown. Writes use an atomic replacement and flush to disk, so a
+process crash leaves the most recent complete checkpoint. Abrupt exits are
+identified in the next restore prompt. A normal close keeps the active stream
+list from before browser teardown, allowing it to reconnect next time too.
+Edits since the last checkpoint can be lost in a crash.
+
+State lives in `~/.local/state/game-stream/session.json`, or
+`$XDG_STATE_HOME/game-stream/session.json`, with owner-only file permissions.
+It contains your input URLs, which may themselves contain private tokens. Browser
+cookies, passwords, resolved segment URLs, and temporary media are not stored.
+If you imported a cookie file, only its file path is remembered; the file must
+still exist and contain usable cookies. Browsers start fresh during recovery,
+so a site may require you to press Play, log in, or refresh cookies again. Live
+streams reconnect at the current live point rather than restoring a seek time.
+
+To forget recovery history, close the app and remove the session file. A corrupt
+or unsupported session displays a warning and starts empty. If saving fails,
+the window title reports it and closing displays a warning rather than silently
+claiming that the current session was saved.
 
 ### Python version / PySide6 installation errors
 
@@ -76,7 +137,7 @@ installs the browser version that matches it.
    source browser minimizes automatically when the window manager permits it.
    **Keep that browser open**: it handles stream renewals and decoding the site's
    transport. The browser is muted; VLC owns the audible output. Stop or close
-   Streamwall to close the associated browser, worker, and local relay.
+   Game Stream to close the associated browser, worker, and local relay.
 3. Use **Audio on/off** and each pane's volume slider. **Solo audio** automatically
    mutes other panes when you enable one. Uncheck it to mix several streams.
 4. **Expand** fills the wall with one pane and selects its audio while other loaded streams keep running.
@@ -104,7 +165,7 @@ need a real player click, so visible browser mode is recommended first.
 
 ### Keyboard and double-click controls
 
-Shortcuts work while Streamwall has focus, including its floating controls.
+Shortcuts work while Game Stream has focus, including its floating controls.
 They do not intercept digits typed into a URL or other text field, dialogs,
 modified shortcuts, or open dropdowns. Keys for panes outside the selected
 1–4 pane count are ignored. Holding a key does not repeatedly toggle it.
@@ -202,9 +263,9 @@ nested playlists and segments, key/init URI rewriting, cookie isolation, byte
 ranges, invalid URLs, Qt layouts/audio/fullscreen controls, and real HLS decoding
 through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
-`chromium-browser`; set `STREAMWALL_CHROMIUM=/path/to/chromium` to choose one.
+`chromium-browser`; set `GAME_STREAM_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **22 tests passed on Python 3.12 and 3.14** with
+Current development validation: **30 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
@@ -212,6 +273,11 @@ Stop/reload cleanup, fullscreen 2-pixel geometry, and fading/revealing controls.
 UI tests also cover number/keypad shortcuts, URL editing protection, remembered
 mute state, zoom/audio round trips, fullscreen double-click input, and two-pane
 hover controls that stay within their pane and never appear simultaneously.
+Recovery tests cover private atomic writes, failed replacements, malformed state,
+process termination, restore/decline behavior, settings checkpoints and clean
+shutdown's active-stream flags. Desktop tests validate the launcher, icon sizes,
+matching application IDs, repeat installation, and actual GIO execution from
+paths containing spaces and special characters.
 Browser install dry runs verify download selection for Ubuntu 22.04,
 24.04 and 26.04 x64 without downloading browsers or changing system packages.
 This does not constitute a full install on each Ubuntu version. Qt control tests
@@ -237,5 +303,10 @@ Host smoke test:
 - Type a URL containing digits: verify shortcuts do not interrupt editing.
 - Stop/reload a pane during playback and discovery; verify its browser exits.
 - Keep a session playing long enough to exercise the site's authorization renewal.
+- Run `./scripts/install-desktop.sh`, launch Game Stream from Applications, and
+  pin the running icon. Verify it groups under that icon rather than Python.
+- Close with active streams and relaunch: accept restoration and verify the links,
+  layout, volumes and selected audio return. Repeat after an unexpected exit.
+  Source browsers may need another Play click.
 
 No environment draft or publication settings are changed by this project.

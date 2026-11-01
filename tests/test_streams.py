@@ -8,8 +8,8 @@ import subprocess
 import pytest
 import requests
 
-from streamwall.proxy import Relay
-from streamwall.resolver import Source, resolve, validate_url, load_cookies
+from game_stream.proxy import Relay
+from game_stream.resolver import Source, resolve, validate_url, load_cookies
 
 
 @contextmanager

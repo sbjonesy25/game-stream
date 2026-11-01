@@ -3,7 +3,7 @@ import os
 os.environ['QT_QPA_PLATFORM'] = 'offscreen'
 from unittest.mock import Mock
 from PySide6.QtWidgets import QApplication
-from streamwall.app import Wall
+from game_stream.app import Wall
 
 
 def test_layout_audio_fullscreen_and_cleanup():
@@ -94,9 +94,9 @@ def test_fullscreen_video_spacing_and_fading_controls():
 def test_persistent_worker_reload_stop_and_cleanup(monkeypatch):
     import time
     from PySide6.QtTest import QTest
-    from streamwall import app as app_module
-    from streamwall.bridge import BrowserRelay
-    from streamwall.resolver import Source
+    from game_stream import app as app_module
+    from game_stream.bridge import BrowserRelay
+    from game_stream.resolver import Source
     app = QApplication.instance() or QApplication([])
     relays = []
 

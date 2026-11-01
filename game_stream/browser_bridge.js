@@ -20,7 +20,7 @@
         for (let i = 0; i < bytes.length; i += 32768)
             binary += String.fromCharCode(...bytes.subarray(i, i + 32768));
         pending++;
-        Promise.resolve(globalThis.__streamwall_fragment({
+        Promise.resolve(globalThis.__game_stream_fragment({
             player: ids.get(hls), sequence: frag.sn, cc: frag.cc || 0,
             duration: frag.duration, bytes: btoa(binary)
         })).catch(() => {}).finally(() => pending--);

@@ -1,0 +1,1 @@
+"""Game Stream desktop viewer."""
