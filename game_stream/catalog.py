@@ -20,7 +20,8 @@ SPORTS = {'nfl': 'NFL', 'nba': 'NBA', 'mlb': 'MLB', 'nhl': 'NHL', 'wnba': 'WNBA'
           'ncaab': 'NCAAB', 'college-basketball': 'NCAAB', 'cbb': 'NCAAB',
           'soccer': 'Soccer', 'football': 'Soccer', 'ufc': 'UFC', 'mma': 'UFC',
           'boxing': 'Boxing', 'tennis': 'Tennis', 'f1': 'Formula 1', 'formula-1': 'Formula 1',
-          'motogp': 'MotoGP', 'wwe': 'WWE', 'cricket': 'Cricket', 'rugby': 'Rugby'}
+          'motogp': 'MotoGP', 'wwe': 'WWE', 'cricket': 'Cricket', 'rugby': 'Rugby',
+          'other-events': 'Other Events'}
 
 
 @dataclass(frozen=True)
@@ -39,24 +40,33 @@ class IndexParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.links = []
         self.current = None
+        self.title_depth = 0
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
         if tag == 'a':
             if self.current:
                 self.links.append(self.current)
-            self.current = [attrs.get('href', ''), attrs.get('title', ''), []]
+            self.current = [attrs.get('href', ''), attrs.get('title') or attrs.get('aria-label', ''), [], []]
+            self.title_depth = 0
         elif tag == 'img' and self.current and attrs.get('alt'):
             self.current[2].append(attrs['alt'])
+        if self.current and (self.title_depth or 'm-card__title' in attrs.get('class', '').split()):
+            self.title_depth += 1
 
     def handle_endtag(self, tag):
         if tag == 'a' and self.current:
             self.links.append(self.current)
             self.current = None
+            self.title_depth = 0
+        elif self.title_depth:
+            self.title_depth -= 1
 
     def handle_data(self, data):
         if self.current:
             self.current[2].append(data)
+            if self.title_depth:
+                self.current[3].append(data)
 
 
 def parse_games(html, root):
@@ -68,7 +78,7 @@ def parse_games(html, root):
     host = urlsplit(root).hostname.lower()
     host = re.sub(r'^(?:www|v\d+)\.', '', host)
     found = {}
-    for href, title, parts in parser.links:
+    for href, title, parts, event_title in parser.links:
         if len(href) > 16384:
             continue
         url = urljoin(root, href)
@@ -91,11 +101,12 @@ def parse_games(html, root):
             continue
         sport = SPORTS[path[category]]
         matchup = re.search(r'[-_](?:vs|v|at)[-_]', slug)
-        if (not matchup and sport in ('NFL', 'NBA', 'MLB', 'NHL', 'WNBA', 'NCAAF', 'NCAAB', 'Soccer', 'Cricket', 'Rugby')):
+        redzone = sport == 'NFL' and re.fullmatch(r'(?:nfl-)?redzone(?:-\d+)?', slug)
+        if (not matchup and not redzone and sport in ('NFL', 'NBA', 'MLB', 'NHL', 'WNBA', 'NCAAF', 'NCAAB', 'Soccer', 'Cricket', 'Rugby')):
             continue
-        if not matchup and len(slug.split('-')) < 3:
+        if not matchup and not redzone and len(slug.split('-')) < 3:
             continue
-        label = ' '.join((title or ' '.join(parts)).split())
+        label = ' '.join((title or ' '.join(event_title) or ' '.join(parts)).split())
         if len(label) < 6 or label.lower() in ('watch now', 'watch live', 'live stream', 'watch stream'):
             label = re.sub(r'-\d+$', '', slug).replace('-', ' ').title().replace(' Vs ', ' vs ')
         label = label[:180]

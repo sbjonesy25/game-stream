@@ -75,10 +75,14 @@ def test_deb_structure_icons_manifest_and_no_root_pip(tmp_path):
     spec = importlib.util.spec_from_file_location('deb_builder', project / 'scripts/build-deb.py')
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)
-    wheel = tmp_path / 'game_stream-0.2.1-py3-none-any.whl'
+    wheel = tmp_path / 'game_stream-0.2.2-py3-none-any.whl'
     with zipfile.ZipFile(wheel, 'w') as z:
         z.writestr('game_stream/__init__.py', '')
     deb = builder.build(wheel, tmp_path / 'out')
+    from game_stream.update import validate_release
+    feed = validate_release(json.loads((deb.parent / 'latest.json').read_text()))
+    assert feed['filename'] == deb.name
+    assert feed['size'] == deb.stat().st_size
     standalone = deb.parent / 'uninstall-game-stream.sh'
     bundle = next(deb.parent.glob('game-stream-uninstaller_*.tar.gz'))
     with tarfile.open(bundle) as archive:
@@ -89,6 +93,7 @@ def test_deb_structure_icons_manifest_and_no_root_pip(tmp_path):
     fields = subprocess.check_output(['dpkg-deb', '--field', str(deb)]).decode()
     assert 'Architecture: amd64' in fields
     assert 'python3-venv' in fields
+    assert 'pkexec | policykit-1' in fields
     extracted = tmp_path / 'unpacked'
     subprocess.run(['dpkg-deb', '--extract', str(deb), str(extracted)], check=True)
     control = tmp_path / 'control'

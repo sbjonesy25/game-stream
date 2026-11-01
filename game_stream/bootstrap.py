@@ -133,7 +133,8 @@ def main(arguments=None, package=None):
         except BlockingIOError:
             raise RuntimeError('Game Stream setup is already running. Wait for it to finish.')
         env = dict(os.environ, QT_QPA_PLATFORM='xcb', RESOURCE_NAME=APP_ID,
-                   PLAYWRIGHT_BROWSERS_PATH=str(root / 'browsers'))
+                   PLAYWRIGHT_BROWSERS_PATH=str(root / 'browsers'),
+                   GAME_STREAM_SYSTEM_PACKAGE=str(package))
         runtime = current_runtime(root, manifest)
         if runtime is None:
             log_path = user_path('XDG_STATE_HOME', '.local/state') / APP_ID / 'setup.log'

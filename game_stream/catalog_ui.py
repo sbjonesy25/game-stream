@@ -126,6 +126,8 @@ class CatalogController(QObject):
         self.refresh_after = False
         wall.catalog = self
         wall.games_menu.aboutToShow.connect(self.populate)
+        for pane in wall.panes:
+            pane.games_menu.aboutToShow.connect(lambda pane=pane: self.populate_pane(pane))
         wall.preferences_button.clicked.connect(self.open_preferences)
         self.populate()
 
@@ -236,6 +238,28 @@ class CatalogController(QObject):
             menu.addAction('No games yet — choose Refresh Games').setEnabled(False)
         self.wall.games_button.setText('Games (!)' if self.error else 'Games ▾')
         self.wall.games_button.setToolTip(self.error or 'Choose a sport, game and target quadrant')
+
+    def populate_pane(self, pane):
+        menu = pane.games_menu
+        menu.clear()
+        grouped = defaultdict(list)
+        for game in self.games:
+            grouped[game.sport].append(game)
+        order = ['NFL', 'NBA', 'MLB', 'NHL', 'NCAAF', 'NCAAB', 'WNBA', 'Soccer', 'UFC']
+        for sport in sorted(grouped, key=lambda s: (order.index(s) if s in order else len(order), s)):
+            league = menu.addMenu(f'{sport} ({len(grouped[sport])})')
+            for game in grouped[sport]:
+                action = league.addAction(game.title.replace('&', '&&'))
+                action.triggered.connect(lambda checked=False, game=game: self.load_game(game, pane.number - 1))
+        if not grouped:
+            menu.addAction('No games yet — choose Refresh Games').setEnabled(False)
+        menu.addSeparator()
+        refresh = menu.addAction('Refreshing games…' if self.worker else 'Refresh Games')
+        refresh.setEnabled(self.worker is None)
+        refresh.triggered.connect(self.refresh)
+        if self.error:
+            menu.addAction(self.error).setEnabled(False)
+        menu.addAction('Preferences…', self.open_preferences)
 
     def load_game(self, game, index):
         if self.wall.closing or not 0 <= index <= 3:

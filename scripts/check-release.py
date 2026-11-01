@@ -20,9 +20,13 @@ def check():
     bundle = releases / f'game-stream-uninstaller_{version}.tar.gz'
     script = releases / 'uninstall-game-stream.sh'
     hashes = dict(line.split('  ', 1)[::-1] for line in (releases / 'SHA256SUMS').read_text().splitlines() if line)
-    for path in (deb, bundle, script):
+    latest = releases / 'latest.json'
+    for path in (deb, bundle, script, latest):
         assert path.is_file(), f'Missing release artifact: {path.name}'
         assert hashlib.sha256(path.read_bytes()).hexdigest() == hashes.get(path.name), f'Checksum mismatch: {path.name}'
+    release = json.loads(latest.read_text())
+    assert release == dict(schema=1, version=version, filename=deb.name,
+                           sha256=hashlib.sha256(deb.read_bytes()).hexdigest(), size=deb.stat().st_size), 'Update feed is stale'
     spec = importlib.util.spec_from_file_location('deb_builder', ROOT / 'scripts/build-deb.py')
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)

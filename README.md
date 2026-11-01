@@ -8,11 +8,11 @@ The normal viewing window does not embed the source website.
 
 ## Shareable Ubuntu installer
 
-Download **[game-stream_0.2.1_amd64.deb](releases/game-stream_0.2.1_amd64.deb)**
+Download **[game-stream_0.2.2_amd64.deb](releases/game-stream_0.2.2_amd64.deb)**
 from `releases/` and install with:
 
 ```bash
-sudo apt install ./game-stream_0.2.1_amd64.deb
+sudo apt install ./game-stream_0.2.2_amd64.deb
 ```
 
 This is the Ubuntu/Linux installer; Android APK files do not run on Ubuntu.
@@ -42,6 +42,36 @@ bundled wheel checksum, and tests the user-runtime update/rollback logic. A real
 relocated virtual environment also ran the installed wheel's Qt UI using existing
 verified dependencies; a clean Ubuntu apt installation and first-run network
 download still require a host test.
+
+### Update an installed application
+
+Install v0.2.2 manually once to get the updater. After that, use **App → Check for
+Updates…**. When a newer version is available, choose Yes to download it. Playback
+continues during the download; you can cancel without closing the app. The app
+checks the size, SHA256 checksum and Debian package name/version/architecture,
+saves the session, then closes all its source browsers. A detached helper waits
+for the app to exit before requesting Ubuntu administrator authorization through
+`pkexec` and running `apt-get install` on the verified package.
+
+The app reopens as your normal desktop user and restores that session automatically.
+Previously active source browsers may still need Play or ordinary login/consent.
+Runtime setup may take a few minutes after an update. If authorization is cancelled
+or installation fails, the helper reopens the installed version and shows an error;
+package-manager details are in `~/.local/state/game-stream/update.log`. Download
+failures leave playback running. If browsers cannot close within three minutes,
+installation is aborted without launching a duplicate app. A session-save failure
+also prevents handoff.
+
+Updates come only from this repository's `main/releases/latest.json` and its
+versioned `.deb` via HTTPS; the published checksum detects incomplete or mismatched
+downloads. Trust in updates comes from this GitHub repository and TLS; this is not
+a separately signed apt repository. No password is stored or passed to a shell.
+The download is staged privately and deleted after use. The updater supports the
+Ubuntu amd64 package; source checkouts continue to use `git pull`.
+
+Every release rebuilds `latest.json` and verifies that it points to the matching
+installer. Push it together with the `.deb` and checksums so installed apps can
+discover subsequent updates.
 
 ## Install on Ubuntu
 
@@ -207,6 +237,11 @@ Open **Preferences** and set **Sports root page**, defaulting to
 **sport → game → Load in quadrant 1–4**. The target pane receives the event-page
 link and loads it automatically. Selecting a quadrant outside the current pane
 count enables it. Selecting a hidden pane returns to the grid so you can see it.
+Each quadrant also has **Games ▾** beside its URL field: choose **league → game**
+to load directly into that quadrant. In fullscreen this picker moves into the
+quadrant's compact hover controls. Each picker reads the same refreshed catalog,
+and includes **Refresh Games** and **Preferences…**. No extra scrape is required
+when opening a picker.
 Game selections try the source player's Play control automatically; login,
 consent, popups or a changed player can still require a manual click in its browser.
 
@@ -248,8 +283,11 @@ server duplicates. It does not promise support for every website or every future
 layout. A challenge/login page, no scheduled events, or a changed URL structure
 can produce no games. The development cloud cannot access the live configured
 root, so live root-page behavior needs testing on your Ubuntu host. Local static
-and JavaScript-rendered indexes are tested, and the saved site HTML supplied
-previously yielded its NFL game link.
+and JavaScript-rendered indexes are tested. The November 2026 root HTML supplied
+by the user yields all 25 event links: 5 NFL (including RedZone), 4 NBA, 4 NHL,
+8 soccer, 1 Formula 1 and 3 Other Events. Card titles and accessible labels keep
+LIVE/status/popularity text out of game names. A reduced fixture retains only
+event anchors, without scripts, advertisements or tracking attributes.
 
 ### Audio border, loading and overlay preferences
 
@@ -417,7 +455,7 @@ Close Game Stream, then from this checkout run:
 git pull
 ./scripts/uninstall-current-setup.sh --dry-run
 ./scripts/uninstall-current-setup.sh
-sudo apt install ./releases/game-stream_0.2.1_amd64.deb
+sudo apt install ./releases/game-stream_0.2.2_amd64.deb
 ```
 
 This removes old launcher/icon registration and only an editable console package
@@ -428,7 +466,7 @@ preferences too. Custom/symlinked environments and unrelated package installs
 are left alone. Launch the installed app from Applications afterward.
 
 The installer already provides **`game-stream-uninstall`**. A separate
-**[`game-stream-uninstaller_0.2.1.tar.gz`](releases/game-stream-uninstaller_0.2.1.tar.gz)**
+**[`game-stream-uninstaller_0.2.2.tar.gz`](releases/game-stream-uninstaller_0.2.2.tar.gz)**
 bundle and **[`uninstall-game-stream.sh`](releases/uninstall-game-stream.sh)**
 are also included in `releases/`; they work without a checkout or Qt/Python app
 runtime. Run `bash uninstall-game-stream.sh` as your normal desktop user. The
@@ -455,7 +493,7 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `GAME_STREAM_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **50 tests passed on Python 3.12 and 3.14** with
+Current development validation: **62 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
@@ -474,7 +512,12 @@ in-flight root changes, safe uninstall ownership checks, package contents, and
 runtime staging/failed-update rollback. New regression checks cover exclusive
 load audio, native Playing mute reapplication, one-pixel border rendering/colors,
 clipboard validation, overlay options, serialized browser replacement, stale
-callbacks, cancelled queued restarts, and source-environment cleanup. All imported Qt modules are supplied by
+callbacks, cancelled queued restarts, and source-environment cleanup. Update tests
+check real Debian package identity, checksums/size limits, cancellation, source-install
+rejection, shutdown-before-install ordering, authorization cancellation, restart as
+the desktop user, session saving and staged-package tampering. The helper's
+privileged apt command and restart are simulated; actual Ubuntu authorization and
+upgrade/relaunch still need a desktop host test. All imported Qt modules are supplied by
 PySide6-Essentials; unused Qt WebEngine/Addons are not required by fresh installs.
 Browser install dry runs verify download selection for Ubuntu 22.04,
 24.04 and 26.04 x64 without downloading browsers or changing system packages.
@@ -484,6 +527,13 @@ embedding, real audio output, and GPU playback still need the Ubuntu host smoke
 test below. This cloud machine lacks libVLC and cannot install system packages.
 
 Host smoke test:
+
+- With the installed package, use App → Check for Updates. Once a newer release
+  is published, verify download, admin authorization, browser closure, installation,
+  normal-user relaunch and session restoration. Test cancellation before download
+  completion and at the authorization prompt.
+- Use each quadrant's Games picker, including fullscreen hover controls, to load
+  a league/game without selecting a separate target quadrant.
 
 - Launch the app, load a known-working HLS URL, and confirm moving video.
 - Load four independent streams, switch audible panes, and verify volume/mute.

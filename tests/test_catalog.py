@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from threading import Event
 import time
@@ -38,6 +39,49 @@ def test_major_sports_relative_links_dedup_and_navigation():
     assert all('ads.example' not in g.url for g in games)
     doubleheader = '<a href="/mlb/team-a-vs-team-b-1/">Game 1</a><a href="/mlb/team-a-vs-team-b-2/">Game 2</a>'
     assert len(parse_games(doubleheader, ROOT)) == 2
+
+
+def test_user_root_snapshot_event_labels_redzone_and_other_events():
+    from collections import Counter
+    html = (Path(__file__).parent / 'fixtures/streameast-root-events.html').read_text()
+    games = parse_games(html, ROOT)
+    assert len(games) == 25
+    assert Counter(g.sport for g in games) == {'NFL': 5, 'NBA': 4, 'NHL': 4, 'Soccer': 8, 'Formula 1': 1, 'Other Events': 3}
+    assert next(g for g in games if '/nfl-redzone-' in g.url).title == 'NFL Redzone'
+    assert next(g for g in games if g.sport == 'Formula 1').title == 'Mexico City Grand Prix'
+    assert next(g for g in games if '/nba/la-clippers-' in g.url).title == 'LA Clippers vs Golden State Warriors'
+    assert not any('Most viewed' in g.title or 'LIVE' in g.title for g in games)
+
+
+def test_each_pane_game_picker_targets_itself_and_tracks_refresh(tmp_path):
+    app = QApplication.instance() or QApplication([])
+    wall = Wall(Mock())
+    wall.show()
+    controller = CatalogController(wall, ConfigStore(tmp_path / 'config.json'), CatalogCache(tmp_path / 'cache.json'))
+    games = parse_games(HTML, ROOT)
+    controller.received(games)
+    for pane in wall.panes:
+        pane.load = Mock()
+    try:
+        for pane in wall.panes:
+            pane.games_menu.aboutToShow.emit()
+            league = next(a.menu() for a in pane.games_menu.actions() if a.text().startswith('NFL'))
+            league.actions()[0].trigger()
+            assert '/nfl/browns-vs-steelers/1' in pane.url.text()
+            pane.load.assert_called_once_with(auto_play=True)
+        controller.received([Game('NBA', 'New game', ROOT + 'nba/new-vs-game/')])
+        pane.games_menu.aboutToShow.emit()
+        assert not any(a.text().startswith('NFL') for a in pane.games_menu.actions())
+        nba = next(a.menu() for a in pane.games_menu.actions() if a.text().startswith('NBA'))
+        assert nba.actions()[0].text() == 'New game'
+        wall.toggle_fullscreen()
+        app.processEvents()
+        assert pane.games_button.parent() is pane.chrome
+        wall.toggle_fullscreen()
+        app.processEvents()
+        assert pane.games_button.parent() is pane.entry
+    finally:
+        wall.close()
 
 
 def test_preferences_validation_and_private_file(tmp_path):

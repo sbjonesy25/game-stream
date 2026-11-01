@@ -18,6 +18,7 @@ sys.path.insert(0, str(ROOT))
 
 DEPENDS = [
     'python3 (>= 3.10)', 'python3 (<< 3.16)', 'python3-venv', 'ca-certificates', 'zenity',
+    'pkexec | policykit-1',
     'vlc', 'libvlc5', 'libxcb-cursor0', 'libxcb-xinerama0', 'libxkbcommon-x11-0',
     'libxcb-icccm4', 'libxcb-keysyms1', 'libx11-xcb1', 'libgl1', 'libegl1',
     'libnss3', 'libnspr4', 'libatk1.0-0t64 | libatk1.0-0',
@@ -145,8 +146,11 @@ exit 0
         deb = output / f'game-stream_{version}_amd64.deb'
         subprocess.run(['dpkg-deb', '--root-owner-group', '-Zxz', '--build', str(stage), str(deb)], check=True)
         companions = build_uninstaller(output, version)
+        latest = output / 'latest.json'
+        text(latest, json.dumps(dict(schema=1, version=version, filename=deb.name,
+                                    sha256=hashlib.sha256(deb.read_bytes()).hexdigest(), size=deb.stat().st_size), indent=2) + '\n')
         text(output / 'SHA256SUMS', ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'
-                                           for p in (deb, *companions)))
+                                           for p in (deb, *companions, latest)))
         return deb
 
 

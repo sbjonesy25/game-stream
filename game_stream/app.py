@@ -163,6 +163,11 @@ class Pane(QFrame):
         self.url.setPlaceholderText('Paste a page link or direct .m3u8 URL')
         self.url.returnPressed.connect(self.load)
         entry.addWidget(self.url, 1)
+        self.games_menu = QMenu(self)
+        self.games_button = QPushButton('Games ▾')
+        self.games_button.setMenu(self.games_menu)
+        self.games_button.setToolTip(f'Choose a league and game for quadrant {number}')
+        entry.addWidget(self.games_button)
         self.load_button = QPushButton('Load')
         self.load_button.clicked.connect(self.load)
         entry.addWidget(self.load_button)
@@ -172,6 +177,7 @@ class Pane(QFrame):
         entry.addWidget(self.paste_button)
         chrome_layout.addWidget(self.entry)
         controls = QHBoxLayout()
+        self.controls = controls
         controls.setSpacing(4)
         pause = QPushButton('Pause')
         pause.setToolTip('Pause / resume this stream')
@@ -239,6 +245,13 @@ class Pane(QFrame):
     def set_immersive(self, enabled):
         self.entry.setVisible(not enabled)
         self.reload_button.setVisible(enabled)
+        if enabled:
+            self.entry.layout().removeWidget(self.games_button)
+            self.controls.insertWidget(0, self.games_button)
+        else:
+            self.controls.removeWidget(self.games_button)
+            self.entry.layout().insertWidget(2, self.games_button)
+        self.games_button.show()
         if enabled and self.chrome.parent() is not self.overlay:
             self.layout.removeWidget(self.chrome)
             self.overlay.box.addWidget(self.chrome)
@@ -396,6 +409,7 @@ class Wall(QMainWindow):
         self.vlc = instance
         self.recovery = None
         self.catalog = None
+        self.updater = None
         self.double_tap_ms = 350
         self.audio_border_enabled = DEFAULTS['audio_border_enabled']
         self.audio_border_color = DEFAULTS['audio_border_color']
@@ -423,6 +437,11 @@ class Wall(QMainWindow):
         tools.setContentsMargins(2, 2, 2, 2)
         tools.setSpacing(6)
         tools.addWidget(QLabel('Game Stream'))
+        self.app_button = QPushButton('App ▾')
+        self.app_menu = QMenu(self.app_button)
+        self.update_action = self.app_menu.addAction('Check for Updates…')
+        self.app_button.setMenu(self.app_menu)
+        tools.addWidget(self.app_button)
         self.games_button = QPushButton('Games ▾')
         self.games_menu = QMenu(self.games_button)
         self.games_button.setMenu(self.games_menu)
@@ -843,6 +862,8 @@ class Wall(QMainWindow):
         self.closing = True
         if self.catalog:
             self.catalog.shutdown()
+        if self.updater:
+            self.updater.shutdown()
         self.video_input.hide()
         self.tools_overlay.hide()
         for pane in self.panes:
@@ -850,7 +871,7 @@ class Wall(QMainWindow):
         for pane in self.panes:
             pane.stop()
         if (any(pane.worker and pane.worker.isRunning() for pane in self.panes) or
-                (self.catalog and self.catalog.busy())):
+                (self.catalog and self.catalog.busy()) or (self.updater and self.updater.busy())):
             event.ignore()
             self.setWindowTitle('Game Stream — closing source browsers…')
             QTimer.singleShot(300, self.close)
@@ -868,7 +889,9 @@ class Wall(QMainWindow):
 
 def main():
     os.environ.setdefault('RESOURCE_NAME', APP_ID)
-    app = QApplication([sys.argv[0], '-name', APP_ID, *sys.argv[1:]])
+    restore_after_update = '--restore-after-update' in sys.argv[1:]
+    arguments = [a for a in sys.argv[1:] if a != '--restore-after-update']
+    app = QApplication([sys.argv[0], '-name', APP_ID, *arguments])
     configure_application(app)
     try:
         import vlc
@@ -894,8 +917,10 @@ def main():
     recovery = SessionRecovery(wall)
     from .catalog_ui import CatalogController
     catalog = CatalogController(wall)
+    from .update_ui import UpdateController
+    updater = UpdateController(wall)
     def startup():
-        recovery.start()
+        recovery.start(ask=(lambda previous: True) if restore_after_update else None)
         catalog.start()
     QTimer.singleShot(0, startup)
     return app.exec()
