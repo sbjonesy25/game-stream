@@ -205,7 +205,7 @@ def test_existing_config_gains_safe_defaults_and_validates_new_values(tmp_path):
     import json
     import pytest
     store = ConfigStore(tmp_path / 'config.json')
-    store.path.write_text(json.dumps({'root_url': DEFAULTS['root_url'], 'double_tap_ms': 400}))
+    store.path.write_text(json.dumps({'root_url': 'https://v2.streameast.ga/', 'double_tap_ms': 400}))
     value = store.load()
     assert value['audio_border_color'] == '#00ff00'
     assert value['overlay_timeout_ms'] == 2200

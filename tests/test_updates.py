@@ -236,3 +236,84 @@ def test_current_version_does_not_download_and_cancel_does_not_close(package, mo
         assert notice.call_count == 1 and not wall.closing
     finally:
         wall.close()
+
+
+def fake_cli(tmp_path, monkeypatch, code):
+    executable = tmp_path / 'gh'
+    executable.write_text('#!/usr/bin/python3\n' + code)
+    executable.chmod(0o755)
+    monkeypatch.setattr(update.shutil, 'which', lambda name, **kwargs: str(executable) if name == 'gh' else None)
+    return executable
+
+
+def test_private_repo_update_uses_existing_cli_login_for_feed_and_deb(package, tmp_path, monkeypatch):
+    import requests
+    path, release = package
+    args_file = tmp_path / 'arguments.json'
+    fake_cli(tmp_path, monkeypatch,
+        'import json,sys\n'
+        f'open({str(args_file)!r}, "w").write(json.dumps(sys.argv))\n'
+        f'payload = {json.dumps(release).encode()!r} if "latest.json" in sys.argv[2] else {path.read_bytes()!r}\n'
+        'sys.stdout.buffer.write(payload)\n')
+    denied = response(b'Not Found')
+    denied.status_code = 404
+    monkeypatch.setattr(requests, 'get', lambda *args, **kwargs: denied)
+    assert update.fetch_release(Event()) == release
+    stage = update.download_release(release, Event())
+    try:
+        assert (stage / path.name).read_bytes() == path.read_bytes()
+        args = json.loads(args_file.read_text())
+        assert args[1] == 'api'
+        assert args[2] == f'repos/sbjonesy25/game-stream/contents/releases/{path.name}?ref=main'
+        assert 'Accept: application/vnd.github.raw+json' in args
+    finally:
+        update.shutil.rmtree(stage)
+
+
+def test_http_error_includes_status_and_private_repo_setup(monkeypatch):
+    import requests
+    denied = response(b'Not Found')
+    denied.status_code = 404
+    monkeypatch.setattr(requests, 'get', lambda *args, **kwargs: denied)
+    monkeypatch.setattr(update.shutil, 'which', lambda *args, **kwargs: None)
+    with pytest.raises(update.UpdateError, match='HTTP 404.*gh auth login'):
+        update.fetch_release(Event())
+    denied.status_code = 503
+    with pytest.raises(update.UpdateError, match='HTTP 503'):
+        update.fetch_release(Event())
+
+
+def test_cli_auth_failure_does_not_expose_stderr_and_is_logged_privately(tmp_path, monkeypatch):
+    fake_cli(tmp_path, monkeypatch, 'import sys\nsys.stderr.write("SECRET TEST CREDENTIAL")\nsys.exit(1)\n')
+    monkeypatch.setenv('XDG_STATE_HOME', str(tmp_path / 'state'))
+    with pytest.raises(update.UpdateError, match='gh auth login') as error:
+        update.transfer_authenticated('latest.json', 16384, Event(), lambda block: None)
+    assert 'SECRET' not in str(error.value)
+    update.record_failure(str(error.value))
+    log = tmp_path / 'state/game-stream/update.log'
+    assert log.stat().st_mode & 0o777 == 0o600
+    assert 'SECRET' not in log.read_text()
+
+
+def test_cli_download_can_be_cancelled_and_cannot_exceed_limit(tmp_path, monkeypatch):
+    from threading import Timer
+    fake_cli(tmp_path, monkeypatch, 'import time\ntime.sleep(20)\n')
+    spawned = []
+    original_popen = subprocess.Popen
+    def popen(*args, **kwargs):
+        process = original_popen(*args, **kwargs)
+        spawned.append(process)
+        return process
+    monkeypatch.setattr(update.subprocess, 'Popen', popen)
+    cancel = Event()
+    timer = Timer(.2, cancel.set)
+    timer.start()
+    try:
+        with pytest.raises(update.UpdateError, match='cancelled'):
+            update.transfer_authenticated('latest.json', 16384, cancel, lambda block: None)
+    finally:
+        timer.cancel()
+    assert spawned[0].poll() is not None
+    fake_cli(tmp_path, monkeypatch, 'import sys\nsys.stdout.write("X" * 10000)\n')
+    with pytest.raises(update.UpdateError, match='expected size'):
+        update.transfer_authenticated('latest.json', 50, Event(), lambda block: None)

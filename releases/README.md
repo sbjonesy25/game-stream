@@ -1,10 +1,10 @@
 # Ubuntu installer
 
-Download `game-stream_0.2.2_amd64.deb` and `SHA256SUMS` from this directory.
+Download `game-stream_0.2.3_amd64.deb` and `SHA256SUMS` from this directory.
 
 ```bash
 sha256sum -c SHA256SUMS
-sudo apt install ./game-stream_0.2.2_amd64.deb
+sudo apt install ./game-stream_0.2.3_amd64.deb
 ```
 
 Open **Applications → Game Stream**. First launch downloads its private Python
@@ -21,16 +21,18 @@ The package is built from the source in this repository using
 libraries come from apt; Python/browser setup runs as the desktop user. See the
 root README for source installation, preferences and validation limits.
 
-v0.2.2 adds **App → Check for Updates…** and per-quadrant **Games ▾** pickers.
-Install this version once manually; later updates are discovered from `latest.json`
-here. The app verifies the new `.deb`, saves/closes the session, requests Ubuntu
-administrator authorization, installs and reopens as the desktop user. The release
-workflow generates and checks the update feed together with the installer.
+v0.2.3 removes Games menus and background catalog scraping, adds F fullscreen,
+and introduces a three-pane fullscreen layout with a selectable large stream.
+Single-stream fullscreen hides the audio border. App → Check for Updates now
+reports HTTP errors and can use an existing GitHub CLI login for private repository
+access (`gh auth login`). Install this version manually once if the old updater
+cannot download from GitHub. Source, icon, update feed and installer are verified
+together by the release workflow.
 
 ## Standalone uninstall tools
 
 - `uninstall-game-stream.sh`: download and run with `bash uninstall-game-stream.sh`.
-- `game-stream-uninstaller_0.2.2.tar.gz`: the same standalone script with instructions.
+- `game-stream-uninstaller_0.2.3.tar.gz`: the same standalone script with instructions.
 
 Both support `--dry-run` and `--purge-user-data`; run as the normal desktop user
 with the app closed. For a source checkout, `scripts/uninstall-current-setup.sh`

@@ -2,7 +2,7 @@ Game Stream for Ubuntu amd64
 ===========================
 
 Install with:
-  sudo apt install ./game-stream_0.2.2_amd64.deb
+  sudo apt install ./game-stream_0.2.3_amd64.deb
 
 Open Applications > Game Stream. First launch requires internet and about 2 GB
 of free disk space for its private Python dependencies and Chromium browser.
@@ -30,15 +30,17 @@ This is not an Android APK and does not run on Android.
 
 Standalone uninstall tools are also distributed with each release:
   bash uninstall-game-stream.sh [--dry-run] [--purge-user-data]
-The game-stream-uninstaller_0.2.2.tar.gz bundle contains this script and instructions.
+The game-stream-uninstaller_0.2.3.tar.gz bundle contains this script and instructions.
 
-Release 0.2.2 adds App > Check for Updates and Games pickers beside each URL
-field (and in fullscreen controls). The supplied root snapshot yields 25 events,
-including RedZone, Formula 1 and Other Events, with clean accessible game labels.
-Updates download and verify a versioned .deb from the project's GitHub repository,
-save the session, close the app/browsers, request administrator authorization via
-pkexec, install with apt-get and reopen as the normal user, restoring that session.
-Install v0.2.2 manually once to get this menu. Package-manager diagnostics are in
-~/.local/state/game-stream/update.log. Cancelled authorization reopens the installed
-version; download failures leave playback running.
-Fresh preferences use https://v2.streameast.ga/ as the root page.
+Release 0.2.3 removes Games menus/background scraping, adds F beside F11,
+and offers a three-pane fullscreen layout with a selectable large stream.
+Single-stream fullscreen hides the audio border. Layout/preferences persist.
+Updates verify a .deb from the project's GitHub repository, save/close the app,
+request administrator authorization with pkexec, install and reopen as the user.
+HTTP error statuses are shown and logged to ~/.local/state/game-stream/update.log.
+For private repository updates, install GitHub CLI (sudo apt install gh) and run
+'gh auth login' as the normal user with an account that can read the repository.
+Game Stream uses that CLI login without reading or storing its credentials.
+Each recipient of private updates needs repository access. Install v0.2.3 manually
+once if the old updater cannot download. Cancelled authorization reopens the
+installed version; download failures leave playback running.

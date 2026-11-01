@@ -8,11 +8,11 @@ The normal viewing window does not embed the source website.
 
 ## Shareable Ubuntu installer
 
-Download **[game-stream_0.2.2_amd64.deb](releases/game-stream_0.2.2_amd64.deb)**
+Download **[game-stream_0.2.3_amd64.deb](releases/game-stream_0.2.3_amd64.deb)**
 from `releases/` and install with:
 
 ```bash
-sudo apt install ./game-stream_0.2.2_amd64.deb
+sudo apt install ./game-stream_0.2.3_amd64.deb
 ```
 
 This is the Ubuntu/Linux installer; Android APK files do not run on Ubuntu.
@@ -45,7 +45,7 @@ download still require a host test.
 
 ### Update an installed application
 
-Install v0.2.2 manually once to get the updater. After that, use **App → Check for
+Install v0.2.3 manually once to get the updater. After that, use **App → Check for
 Updates…**. When a newer version is available, choose Yes to download it. Playback
 continues during the download; you can cancel without closing the app. The app
 checks the size, SHA256 checksum and Debian package name/version/architecture,
@@ -68,6 +68,33 @@ downloads. Trust in updates comes from this GitHub repository and TLS; this is n
 a separately signed apt repository. No password is stored or passed to a shell.
 The download is staged privately and deleted after use. The updater supports the
 Ubuntu amd64 package; source checkouts continue to use `git pull`.
+
+#### GitHub download errors / private repositories
+
+v0.2.2 hid all non-200 HTTP responses behind “could not be downloaded from
+GitHub.” v0.2.3 reports the HTTP status and saves an actionable summary to
+`~/.local/state/game-stream/update.log`. HTTP 404 can mean a missing file or a
+private repository that the app cannot access; HTTP 401/403 can also indicate
+missing authorization or a GitHub access limit. The old message alone cannot
+identify which response your machine received.
+
+On HTTP 401/403/404, the updater can use your existing GitHub CLI login. For a
+private repository, install v0.2.3 manually once, then run as your normal user:
+
+```bash
+sudo apt install gh
+gh auth login
+```
+
+Sign in to GitHub.com with an account that can read `sbjonesy25/game-stream`, then
+retry **App → Check for Updates…**. The app calls `gh api` directly, with prompts
+disabled; GitHub CLI handles credentials. Tokens/passwords are never copied into
+Game Stream config, logs or installer files. Each friend using private-repository
+updates needs their own repository access. Public update files do not require
+GitHub CLI or login. Missing files/denied accounts still require correcting
+repository access or installing a shared `.deb` manually. The package recommends
+GitHub CLI; it is optional. HTTP and authenticated downloads both keep the same
+size/checksum/package-identity validation and cancellation behavior.
 
 Every release rebuilds `latest.json` and verifies that it points to the matching
 installer. Push it together with the `.deb` and checksums so installed apps can
@@ -208,7 +235,7 @@ installs the browser version that matches it.
 3. Use **Audio on/off** and each pane's volume slider. **Solo audio** automatically
    mutes other panes when you enable one. Uncheck it to mix several streams.
 4. **Expand** fills the wall with one pane and selects its audio while other loaded streams keep running.
-   **F11** makes the window fullscreen; combine these for a single fullscreen
+   **F** or **F11** makes the window fullscreen; combine these for a single fullscreen
    stream. **Esc** restores the grid and exits fullscreen.
 5. Fullscreen removes all reserved control areas and outer margins. Videos have
    **2 logical pixels of spacing** between them. Move the mouse to reveal floating
@@ -230,38 +257,30 @@ also use the HTTP relay, allowing the browser to close after discovery. Uncheck
 **Show browser** to try automatic playback without a visible window. Some sites
 need a real player click, so visible browser mode is recommended first.
 
-### Games menu and Preferences
+### Layout and Preferences
 
-Open **Preferences** and set **Sports root page**, defaulting to
-`https://v2.streameast.ga/`. Choose **Games → Refresh Games**, then navigate
-**sport → game → Load in quadrant 1–4**. The target pane receives the event-page
-link and loads it automatically. Selecting a quadrant outside the current pane
-count enables it. Selecting a hidden pane returns to the grid so you can see it.
-Each quadrant also has **Games ▾** beside its URL field: choose **league → game**
-to load directly into that quadrant. In fullscreen this picker moves into the
-quadrant's compact hover controls. Each picker reads the same refreshed catalog,
-and includes **Refresh Games** and **Preferences…**. No extra scrape is required
-when opening a picker.
-Game selections try the source player's Play control automatically; login,
-consent, popups or a changed player can still require a manual click in its browser.
+The Games menus, root-page settings and automatic catalog scraping were removed
+in v0.2.3. Paste a source link or use Paste & Load to start a stream.
 
-The menu groups NFL, NBA, MLB, NHL, NCAAF, NCAAB, WNBA, soccer and other recognized
-sports. Refresh runs in the background without stopping playing streams. Failed
-refreshes keep the last successful list and show the error in **Games (!)**.
-The last refresh time is displayed, since cached game links can become stale.
-Changing the configured root clears the old provider's list and starts a new
-refresh. **Use a browser to render the game list** is useful for JavaScript
-indexes. Even with it unchecked, an empty/failed HTTP result can fall back to
-browser rendering. No site challenge or access restriction is bypassed.
+For three streams, select **3 panes** and press **F** or **F11**. By default,
+fullscreen uses **Large stream + two**: one large pane on the left and two smaller
+panes stacked on the right, using the whole canvas without an empty fourth cell.
+Choose **Layout → Large stream → Quadrant 1 / 2 / 3** to select the large stream.
+This rearranges running panes without restarting players, changing audio, or
+recreating native video windows. **Layout → Grid** restores the original grid.
+The Layout button appears when three panes are enabled and is available in the
+fullscreen top controls. Windowed mode retains the normal grid. Video keeps its
+aspect ratio, so individual panes can still have letterboxing.
 
-Preferences are saved to `~/.config/game-stream/config.json` (or
-`$XDG_CONFIG_HOME/game-stream/config.json`). See [`config.example.json`](config.example.json):
+**Preferences** also configures the layout and large-stream choice, double-tap
+interval, audio border and fullscreen overlays. Layout choices persist between
+launches. Preferences live in `~/.config/game-stream/config.json` (or
+`$XDG_CONFIG_HOME/game-stream/config.json`). Example:
 
 ```json
 {
-  "root_url": "https://v2.streameast.ga/",
-  "catalog_browser": false,
-  "refresh_on_start": true,
+  "three_pane_layout": "focus",
+  "three_pane_primary": 1,
   "double_tap_ms": 350,
   "audio_border_enabled": true,
   "audio_border_color": "#00ff00",
@@ -271,23 +290,9 @@ Preferences are saved to `~/.config/game-stream/config.json` (or
 }
 ```
 
-You can edit the file or use the Preferences dialog. **Refresh Games** reloads
-manual file changes. The cached catalog is private to your user under
-`~/.cache/game-stream/catalog.json` (`XDG_CACHE_HOME` is respected). Cookies and
-passwords are not stored in Preferences or the catalog. The imported cookie-file
-reference from your session can be used by the browser-based index refresh.
-
-Parsing recognizes same-site event anchors with sport/matchup paths, such as
-`/nfl/team-a-vs-team-b/1`. It handles relative links, nested anchor content and
-server duplicates. It does not promise support for every website or every future
-layout. A challenge/login page, no scheduled events, or a changed URL structure
-can produce no games. The development cloud cannot access the live configured
-root, so live root-page behavior needs testing on your Ubuntu host. Local static
-and JavaScript-rendered indexes are tested. The November 2026 root HTML supplied
-by the user yields all 25 event links: 5 NFL (including RedZone), 4 NBA, 4 NHL,
-8 soccer, 1 Formula 1 and 3 Other Events. Card titles and accessible labels keep
-LIVE/status/popularity text out of game names. A reduced fixture retains only
-event anchors, without scripts, advertisements or tracking attributes.
+Use Preferences or edit the file while the app is closed, then relaunch. Existing
+configurations gain the new defaults; obsolete root/catalog keys are ignored.
+Saved source links, cookies-file references and session history are preserved.
 
 ### Audio border, loading and overlay preferences
 
@@ -296,9 +301,11 @@ lets you disable it or choose another six-digit hex color (for example `#00ff00`
 Fullscreen paints the border above VLC without changing the video geometry or
 2-pixel quadrant spacing. Windowed mode uses a one-pixel pane frame. This marks
 the selected audio source, including while it buffers or is paused; manual mixed
-audio highlights each selected source.
+audio highlights each selected source. Single-stream fullscreen suppresses the
+border, both with 1 pane selected and when a quadrant is expanded. Returning to
+a fullscreen grid restores the border around the selected audio source.
 
-**Load**, **Paste & Load**, and Games-menu selections now give the target pane
+**Load** and **Paste & Load** give the target pane
 exclusive audio, even when Solo audio is unchecked. Other panes are muted. Session
 recovery preserves the saved audio/mute state rather than selecting a different
 source for every restored link. Chromium source windows are always silent; VLC
@@ -318,18 +325,18 @@ Preferences also controls fullscreen overlays:
 - `overlay_on_shortcuts`: disable automatic controls after audio/zoom/fullscreen
   actions, while retaining mouse-triggered controls.
 - `overlay_enabled`: disable all fullscreen control overlays. Keyboard shortcuts,
-  double-click zoom and the audio border still work. Press F11/Esc to return to
+  double-click zoom and the multi-pane audio border still work. Press F/F11/Esc to return to
   the normal window and change Preferences.
 
 The config file accepts `audio_border_enabled`, `audio_border_color`,
 `overlay_enabled`, `overlay_on_shortcuts`, and `overlay_timeout_ms`. Older config
-files gain safe defaults automatically. Fresh installations default to
-`https://v2.streameast.ga/`; existing user root overrides are preserved.
+files gain safe defaults automatically. Three-pane settings use
+`three_pane_layout` (`focus` or `grid`) and `three_pane_primary` (1, 2 or 3).
 
 ### Keyboard and double-click controls
 
 Shortcuts work while Game Stream has focus, including its floating controls.
-They do not intercept digits typed into a URL or other text field, dialogs,
+They do not intercept digits or F typed into a URL or other text field, dialogs,
 modified shortcuts, or open dropdowns. Keys for panes outside the selected
 1–4 pane count are ignored. Holding a key does not repeatedly toggle it.
 
@@ -341,7 +348,7 @@ modified shortcuts, or open dropdowns. Keys for panes outside the selected
 | `5`, `6`, `7`, `8` | Zoom quadrant 1, 2, 3, or 4 and select its audio. Enter fullscreen if needed. |
 | Same zoom key again | Return to the selected pane grid, staying fullscreen and preserving audio/mute. |
 | Double-click video while fullscreen | Zoom that quadrant and select its audio; double-click again to restore the grid without changing audio/mute. |
-| `F11` | Toggle window fullscreen. |
+| `F` or `F11` | Toggle window fullscreen. |
 | `Esc` | Restore the grid and leave fullscreen. |
 
 The default double-tap interval is 350 ms; Preferences allows 150–800 ms.
@@ -455,7 +462,7 @@ Close Game Stream, then from this checkout run:
 git pull
 ./scripts/uninstall-current-setup.sh --dry-run
 ./scripts/uninstall-current-setup.sh
-sudo apt install ./releases/game-stream_0.2.2_amd64.deb
+sudo apt install ./releases/game-stream_0.2.3_amd64.deb
 ```
 
 This removes old launcher/icon registration and only an editable console package
@@ -466,7 +473,7 @@ preferences too. Custom/symlinked environments and unrelated package installs
 are left alone. Launch the installed app from Applications afterward.
 
 The installer already provides **`game-stream-uninstall`**. A separate
-**[`game-stream-uninstaller_0.2.2.tar.gz`](releases/game-stream-uninstaller_0.2.2.tar.gz)**
+**[`game-stream-uninstaller_0.2.3.tar.gz`](releases/game-stream-uninstaller_0.2.3.tar.gz)**
 bundle and **[`uninstall-game-stream.sh`](releases/uninstall-game-stream.sh)**
 are also included in `releases/`; they work without a checkout or Qt/Python app
 runtime. Run `bash uninstall-game-stream.sh` as your normal desktop user. The
@@ -506,16 +513,19 @@ process termination, restore/decline behavior, settings checkpoints and clean
 shutdown's active-stream flags. Desktop tests validate the launcher, icon sizes,
 matching application IDs, repeat installation, and actual GIO execution from
 paths containing spaces and special characters. Added checks cover double-tap
-timing and audio/zoom parity, multi-sport parsing, rendered index discovery,
-config/cache validation, target-quadrant menu actions, failed refresh retention,
-in-flight root changes, safe uninstall ownership checks, package contents, and
+timing and audio/zoom parity, safe uninstall ownership checks, package contents, and
 runtime staging/failed-update rollback. New regression checks cover exclusive
 load audio, native Playing mute reapplication, one-pixel border rendering/colors,
 clipboard validation, overlay options, serialized browser replacement, stale
-callbacks, cancelled queued restarts, and source-environment cleanup. Update tests
+callbacks, cancelled queued restarts, and source-environment cleanup. Layout tests
+cover F/F11 and URL editing, three-pane canvas coverage, all large-stream choices,
+unchanged native video handles/playback/audio, grid/zoom round trips, legacy config
+migration and fullscreen single-stream border suppression. Update tests
 check real Debian package identity, checksums/size limits, cancellation, source-install
 rejection, shutdown-before-install ordering, authorization cancellation, restart as
-the desktop user, session saving and staged-package tampering. The helper's
+the desktop user, session saving and staged-package tampering. A local fake GitHub
+CLI exercises private-repository feed/package downloads, missing login, bounded
+output, cancellation, and credential-free private diagnostics. The helper's
 privileged apt command and restart are simulated; actual Ubuntu authorization and
 upgrade/relaunch still need a desktop host test. All imported Qt modules are supplied by
 PySide6-Essentials; unused Qt WebEngine/Addons are not required by fresh installs.
@@ -532,8 +542,10 @@ Host smoke test:
   is published, verify download, admin authorization, browser closure, installation,
   normal-user relaunch and session restoration. Test cancellation before download
   completion and at the authorization prompt.
-- Use each quadrant's Games picker, including fullscreen hover controls, to load
-  a league/game without selecting a separate target quadrant.
+- Select 3 panes, enter fullscreen with F, and choose each Layout → Large stream
+  option. Check all streams stay visible, video/audio continue and there is no
+  empty grid cell. Zoom a stream and restore; verify the audio border disappears
+  only for the single-stream fullscreen view. Try Layout → Grid and relaunch.
 
 - Launch the app, load a known-working HLS URL, and confirm moving video.
 - Load four independent streams, switch audible panes, and verify volume/mute.
@@ -548,10 +560,8 @@ Host smoke test:
   compact controls appear, fit inside it, and remain clickable above native video.
 - Test `1–4`, `0`, and `5–8`; double-click native video to zoom and return to the
   grid. Check the viewed source retains audio and explicit mute stays muted.
-- Type a URL containing digits: verify shortcuts do not interrupt editing.
+- Type a URL containing digits and F: verify shortcuts do not interrupt editing.
 - Stop/reload a pane during playback and discovery; verify its browser exits.
-- Set a root in Preferences, refresh the catalog, and load a real event into each
-  target quadrant. Verify refreshed links and automated Play on your host.
 - Double-tap `1–4`, and try slow taps: quick taps zoom; slow taps stay audio-only.
 - Install the `.deb` on a clean Ubuntu amd64 desktop and complete first-run setup.
   Test the Applications entry, dock pin, update, and uninstall behavior there.

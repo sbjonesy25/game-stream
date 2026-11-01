@@ -4,10 +4,9 @@ import os
 import re
 from pathlib import Path
 import tempfile
-from .resolver import validate_url
 
-DEFAULTS = dict(root_url='https://v2.streameast.ga/', catalog_browser=False,
-                refresh_on_start=True, double_tap_ms=350, audio_border_enabled=True,
+DEFAULTS = dict(three_pane_layout='focus', three_pane_primary=1,
+                double_tap_ms=350, audio_border_enabled=True,
                 audio_border_color='#00ff00', overlay_enabled=True,
                 overlay_on_shortcuts=True, overlay_timeout_ms=2200)
 
@@ -43,9 +42,10 @@ class ConfigStore:
 
     def validate(self, data):
         value = {**DEFAULTS, **data}
-        if not isinstance(value['root_url'], str) or len(value['root_url']) > 16384:
-            raise ValueError('Enter a valid root page URL')
-        value['root_url'] = validate_url(value['root_url'].strip())
+        if value['three_pane_layout'] not in ('focus', 'grid'):
+            raise ValueError('Choose a valid three-pane layout')
+        if type(value['three_pane_primary']) is not int or not 1 <= value['three_pane_primary'] <= 3:
+            raise ValueError('The large stream must be quadrant 1, 2 or 3')
         if type(value['double_tap_ms']) is not int or not 150 <= value['double_tap_ms'] <= 800:
             raise ValueError('Double-tap interval must be 150–800 ms')
         if (not isinstance(value['audio_border_color'], str) or
@@ -53,8 +53,7 @@ class ConfigStore:
             raise ValueError('Audio border color must be a six-digit hex color, such as #00ff00')
         if type(value['overlay_timeout_ms']) is not int or not 0 <= value['overlay_timeout_ms'] <= 30000:
             raise ValueError('Overlay duration must be 0–30000 ms')
-        if any(type(value[k]) is not bool for k in ('catalog_browser', 'refresh_on_start',
-                'audio_border_enabled', 'overlay_enabled', 'overlay_on_shortcuts')):
+        if any(type(value[k]) is not bool for k in ('audio_border_enabled', 'overlay_enabled', 'overlay_on_shortcuts')):
             raise ValueError('Invalid preferences')
         return {key: value[key] for key in DEFAULTS}
 

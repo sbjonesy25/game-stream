@@ -103,6 +103,7 @@ class UpdateController(QObject):
                 self.start_worker(result)
 
     def failed(self, message):
+        update.record_failure(message)
         self.error = message
 
     def close_dialog(self):

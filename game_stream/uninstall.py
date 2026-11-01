@@ -31,6 +31,7 @@ def user_files(purge=False):
         paths += [xdg('XDG_CONFIG_HOME', '.config') / APP_ID / 'config.json',
                   xdg('XDG_STATE_HOME', '.local/state') / APP_ID / 'session.json',
                   xdg('XDG_STATE_HOME', '.local/state') / APP_ID / 'setup.log',
+                  xdg('XDG_STATE_HOME', '.local/state') / APP_ID / 'update.log',
                   xdg('XDG_CACHE_HOME', '.cache') / APP_ID / 'catalog.json']
     return paths
 

@@ -6,7 +6,7 @@ from time import monotonic
 # libVLC embeds into an X11 window; XWayland supports this on Ubuntu Wayland.
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEvent, QPoint, QRect, QByteArray
-from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon, QPen
+from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon, QPen, QActionGroup
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
     QPushButton, QSlider, QVBoxLayout, QWidget, QTextEdit, QPlainTextEdit, QAbstractSpinBox, QMenu)
@@ -75,7 +75,7 @@ class VideoInputLayer(QWidget):
         # through fully transparent pixels. This does not reserve video space.
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(0, 0, 0, 1))
-        if self.wall.audio_border_enabled:
+        if self.wall.audio_border_enabled and not self.wall.single_stream_fullscreen():
             painter.setPen(QPen(QColor(self.wall.audio_border_color), 1))
             for pane in self.wall.panes:
                 if pane.isVisible() and pane.audio.isChecked():
@@ -163,11 +163,6 @@ class Pane(QFrame):
         self.url.setPlaceholderText('Paste a page link or direct .m3u8 URL')
         self.url.returnPressed.connect(self.load)
         entry.addWidget(self.url, 1)
-        self.games_menu = QMenu(self)
-        self.games_button = QPushButton('Games ▾')
-        self.games_button.setMenu(self.games_menu)
-        self.games_button.setToolTip(f'Choose a league and game for quadrant {number}')
-        entry.addWidget(self.games_button)
         self.load_button = QPushButton('Load')
         self.load_button.clicked.connect(self.load)
         entry.addWidget(self.load_button)
@@ -177,7 +172,6 @@ class Pane(QFrame):
         entry.addWidget(self.paste_button)
         chrome_layout.addWidget(self.entry)
         controls = QHBoxLayout()
-        self.controls = controls
         controls.setSpacing(4)
         pause = QPushButton('Pause')
         pause.setToolTip('Pause / resume this stream')
@@ -245,13 +239,6 @@ class Pane(QFrame):
     def set_immersive(self, enabled):
         self.entry.setVisible(not enabled)
         self.reload_button.setVisible(enabled)
-        if enabled:
-            self.entry.layout().removeWidget(self.games_button)
-            self.controls.insertWidget(0, self.games_button)
-        else:
-            self.controls.removeWidget(self.games_button)
-            self.entry.layout().insertWidget(2, self.games_button)
-        self.games_button.show()
         if enabled and self.chrome.parent() is not self.overlay:
             self.layout.removeWidget(self.chrome)
             self.overlay.box.addWidget(self.chrome)
@@ -408,7 +395,7 @@ class Wall(QMainWindow):
         super().__init__()
         self.vlc = instance
         self.recovery = None
-        self.catalog = None
+        self.preferences = None
         self.updater = None
         self.double_tap_ms = 350
         self.audio_border_enabled = DEFAULTS['audio_border_enabled']
@@ -416,6 +403,8 @@ class Wall(QMainWindow):
         self.overlay_enabled = DEFAULTS['overlay_enabled']
         self.overlay_on_shortcuts = DEFAULTS['overlay_on_shortcuts']
         self.overlay_timeout_ms = DEFAULTS['overlay_timeout_ms']
+        self.three_pane_layout = DEFAULTS['three_pane_layout']
+        self.three_pane_primary = DEFAULTS['three_pane_primary']
         self._number_tap = None
         self.key_clock = monotonic
         self.cookie_path = ''
@@ -442,12 +431,29 @@ class Wall(QMainWindow):
         self.update_action = self.app_menu.addAction('Check for Updates…')
         self.app_button.setMenu(self.app_menu)
         tools.addWidget(self.app_button)
-        self.games_button = QPushButton('Games ▾')
-        self.games_menu = QMenu(self.games_button)
-        self.games_button.setMenu(self.games_menu)
-        tools.addWidget(self.games_button)
         self.preferences_button = QPushButton('Preferences')
         tools.addWidget(self.preferences_button)
+        self.layout_button = QPushButton('Layout ▾')
+        self.layout_menu = QMenu(self.layout_button)
+        self.layout_button.setMenu(self.layout_menu)
+        tools.addWidget(self.layout_button)
+        layout_group = QActionGroup(self)
+        self.layout_actions = {}
+        for title, mode in [('Large stream + two (fullscreen)', 'focus'), ('Grid', 'grid')]:
+            action = self.layout_menu.addAction(title)
+            action.setCheckable(True)
+            layout_group.addAction(action)
+            action.triggered.connect(lambda checked=False, mode=mode: self.choose_three_layout(mode=mode))
+            self.layout_actions[mode] = action
+        primary_menu = self.layout_menu.addMenu('Large stream')
+        primary_group = QActionGroup(self)
+        self.primary_actions = []
+        for number in range(1, 4):
+            action = primary_menu.addAction(f'Quadrant {number}')
+            action.setCheckable(True)
+            primary_group.addAction(action)
+            action.triggered.connect(lambda checked=False, number=number: self.choose_three_layout(primary=number))
+            self.primary_actions.append(action)
         tools.addStretch()
         tools.addWidget(QLabel('Panes'))
         self.count = QComboBox()
@@ -469,7 +475,7 @@ class Wall(QMainWindow):
         clear = QPushButton('Clear cookies')
         clear.clicked.connect(self.clear_cookies)
         tools.addWidget(clear)
-        full = QPushButton('Fullscreen · F11')
+        full = QPushButton('Fullscreen · F / F11')
         full.clicked.connect(self.toggle_fullscreen)
         tools.addWidget(full)
         self.layout.addWidget(self.tools)
@@ -503,8 +509,10 @@ class Wall(QMainWindow):
         self.video_input.update()
 
     def apply_view_preferences(self, value):
+        layout_changed = (self.three_pane_layout != value['three_pane_layout'] or
+                          self.three_pane_primary != value['three_pane_primary'])
         for key in ('audio_border_enabled', 'audio_border_color', 'overlay_enabled',
-                    'overlay_on_shortcuts', 'overlay_timeout_ms'):
+                    'overlay_on_shortcuts', 'overlay_timeout_ms', 'three_pane_layout', 'three_pane_primary'):
             setattr(self, key, value[key])
         self.idle.setInterval(self.overlay_timeout_ms or 2200)
         if not self.overlay_enabled or self.overlay_timeout_ms == 0:
@@ -516,6 +524,22 @@ class Wall(QMainWindow):
             self.root.unsetCursor()
             self.video_input.unsetCursor()
         self.refresh_audio_borders()
+        if layout_changed:
+            self.layout_panes()
+
+    def single_stream_fullscreen(self):
+        return self.immersive and (self.expanded is not None or self.count.currentIndex() == 0)
+
+    def choose_three_layout(self, mode=None, primary=None):
+        self.expanded = None
+        if mode is not None:
+            self.three_pane_layout = mode
+        if primary is not None:
+            self.three_pane_primary = primary
+            self.three_pane_layout = 'focus'
+        self.layout_panes()
+        if self.preferences:
+            self.preferences.save_layout()
 
     def session_snapshot(self):
         return dict(version=1, pane_count=self.count.currentIndex() + 1,
@@ -558,7 +582,7 @@ class Wall(QMainWindow):
             QTimer.singleShot(0, self.align_video_input)
         owned = isinstance(watched, QWidget) and watched.window() in self.owned_windows()
         if owned:
-            if event.type() == QEvent.Type.KeyPress and self.handle_number_key(event):
+            if event.type() == QEvent.Type.KeyPress and self.handle_shortcut_key(event, watched):
                 return True
             if (event.type() == QEvent.Type.MouseButtonDblClick and self.immersive and
                     event.button() == Qt.MouseButton.LeftButton and watched in [p.video for p in self.panes]):
@@ -574,15 +598,21 @@ class Wall(QMainWindow):
     def owned_windows(self):
         return [self, self.video_input, self.tools_overlay, *[p.overlay for p in self.panes]]
 
-    def handle_number_key(self, event):
+    def handle_shortcut_key(self, event, receiver=None):
         # Numbers typed into URLs (including the fullscreen toolbar's dialogs)
         # must remain text, and modified keys retain their normal meaning.
         focus = QApplication.focusWidget()
-        if (isinstance(focus, (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)) or
+        editors = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
+        if (isinstance(focus, editors) or isinstance(receiver, editors) or
                 QApplication.activeModalWidget() or QApplication.activePopupWidget() or
                 event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier):
             self._number_tap = None
             return False
+        if event.key() == Qt.Key.Key_F:
+            self._number_tap = None
+            if not event.isAutoRepeat():
+                self.toggle_fullscreen()
+            return True
         key = event.key() - Qt.Key.Key_0
         if not 0 <= key <= 8:
             self._number_tap = None
@@ -681,7 +711,7 @@ class Wall(QMainWindow):
             pane.set_immersive(enabled)
             if enabled:
                 pane.url.clearFocus()
-        self.refresh_audio_borders()
+        self.layout_panes()
         if enabled:
             self.position_video_input()
             QTimer.singleShot(0, lambda: self.show_controls(reason='view'))
@@ -811,21 +841,46 @@ class Wall(QMainWindow):
         self._number_tap = None
         self.expanded = None
         count = self.count.currentIndex() + 1
-        for pane in self.panes:
-            self.grid.removeWidget(pane)
-            pane.hide()
-            pane.full.setText('Expand')
-        for i, pane in enumerate(self.panes[:count]):
-            self.grid.addWidget(pane, i // 2 if count > 2 else 0, i % 2 if count > 1 else 0)
-            pane.show()
+        self.layout_panes()
         for pane in self.panes[count:]:
             pane.stop()  # Hidden streams must not consume bandwidth or play audio.
             pane.audio.setChecked(False)
         if self.last_audio is not None and not self.pane_enabled(self.last_audio):
             self.last_audio = None
+
+    def layout_panes(self):
+        count = self.count.currentIndex() + 1
+        self.layout_button.setVisible(count == 3)
+        for mode, action in self.layout_actions.items():
+            action.setChecked(self.three_pane_layout == mode)
+        for i, action in enumerate(self.primary_actions, 1):
+            action.setChecked(self.three_pane_primary == i)
+        for pane in self.panes:
+            self.grid.removeWidget(pane)
+            pane.hide()
+            pane.full.setText('Expand')
+        focus = count == 3 and self.immersive and self.three_pane_layout == 'focus'
+        if self.expanded:
+            self.grid.addWidget(self.expanded, 0, 0, 2, 2)
+            self.expanded.full.setText('Restore grid')
+            self.expanded.show()
+        elif focus:
+            primary = self.panes[self.three_pane_primary - 1]
+            self.grid.addWidget(primary, 0, 0, 2, 1)
+            primary.show()
+            others = [p for p in self.panes[:3] if p is not primary]
+            for row, pane in enumerate(others):
+                self.grid.addWidget(pane, row, 1)
+                pane.show()
+        else:
+            for i, pane in enumerate(self.panes[:count]):
+                self.grid.addWidget(pane, i // 2 if count > 2 else 0, i % 2 if count > 1 else 0)
+                pane.show()
         for i in range(2):
             self.grid.setRowStretch(i, 1 if i == 0 or count > 2 else 0)
-            self.grid.setColumnStretch(i, 1 if i == 0 or count > 1 else 0)
+            self.grid.setColumnStretch(i, (2 if i == 0 else 1) if focus and not self.expanded else
+                                       (1 if i == 0 or count > 1 else 0))
+        self.refresh_audio_borders()
         if self.immersive:
             QTimer.singleShot(0, lambda: self.show_controls(reason='view'))
 
@@ -838,14 +893,7 @@ class Wall(QMainWindow):
         if select_audio:
             self.select_audio(pane)
         self.expanded = pane
-        for other in self.panes:
-            self.grid.removeWidget(other)
-            other.hide()
-        self.grid.addWidget(pane, 0, 0, 2, 2)
-        pane.full.setText('Restore grid')
-        pane.show()
-        if self.immersive:
-            QTimer.singleShot(0, lambda: self.show_controls(reason='view'))
+        self.layout_panes()
 
     def toggle_fullscreen(self):
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
@@ -860,8 +908,6 @@ class Wall(QMainWindow):
         if not self.closing and self.recovery:
             self.recovery.before_close()
         self.closing = True
-        if self.catalog:
-            self.catalog.shutdown()
         if self.updater:
             self.updater.shutdown()
         self.video_input.hide()
@@ -871,7 +917,7 @@ class Wall(QMainWindow):
         for pane in self.panes:
             pane.stop()
         if (any(pane.worker and pane.worker.isRunning() for pane in self.panes) or
-                (self.catalog and self.catalog.busy()) or (self.updater and self.updater.busy())):
+                (self.updater and self.updater.busy())):
             event.ignore()
             self.setWindowTitle('Game Stream — closing source browsers…')
             QTimer.singleShot(300, self.close)
@@ -915,13 +961,13 @@ def main():
     wall.show()
     from .recovery import SessionRecovery
     recovery = SessionRecovery(wall)
-    from .catalog_ui import CatalogController
-    catalog = CatalogController(wall)
+    from .preferences import PreferencesController
+    preferences = PreferencesController(wall)
     from .update_ui import UpdateController
     updater = UpdateController(wall)
     def startup():
+        preferences.start()
         recovery.start(ask=(lambda previous: True) if restore_after_update else None)
-        catalog.start()
     QTimer.singleShot(0, startup)
     return app.exec()
 

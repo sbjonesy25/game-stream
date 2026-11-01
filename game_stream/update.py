@@ -11,11 +11,68 @@ import tempfile
 from time import monotonic, sleep
 
 RELEASE_ROOT = 'https://raw.githubusercontent.com/sbjonesy25/game-stream/main/releases/'
+REPOSITORY = 'sbjonesy25/game-stream'
 MAX_PACKAGE = 200 * 1024 * 1024
 
 
 class UpdateError(RuntimeError):
     pass
+
+
+def record_failure(message):
+    """Only actionable summaries, never GitHub credentials or response bodies."""
+    state = Path(os.environ.get('XDG_STATE_HOME', Path.home() / '.local/state'))
+    if not state.is_absolute():
+        state = Path.home() / '.local/state'
+    try:
+        path = state / 'game-stream/update.log'
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with os.fdopen(os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o600), 'w') as log:
+            log.write(message + '\n')
+    except OSError:
+        pass
+
+
+def transfer_authenticated(filename, limit, cancel, consume):
+    """Use the user's GitHub CLI login; never read/export/store its token."""
+    if not shutil.which('gh', path='/usr/bin:/usr/local/bin'):
+        raise UpdateError('GitHub requires repository access. If this repository is private, install GitHub CLI (sudo apt install gh), run gh auth login with an account that can read it, and retry. You can also install the .deb manually.')
+    cli = shutil.which('gh', path='/usr/bin:/usr/local/bin')
+    env = dict(clean_environment(), GH_PROMPT_DISABLED='1', GH_HOST='github.com')
+    command = [cli, 'api', f'repos/{REPOSITORY}/contents/releases/{filename}?ref=main',
+               '--hostname', 'github.com', '-H', 'Accept: application/vnd.github.raw+json']
+    with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
+        process = subprocess.Popen(command, stdout=output, stderr=errors, stdin=subprocess.DEVNULL, env=env)
+        deadline = monotonic() + 180
+        try:
+            while process.poll() is None:
+                if cancel.wait(.1):
+                    raise UpdateError('Update cancelled')
+                if os.fstat(output.fileno()).st_size > limit:
+                    raise UpdateError('Update download exceeds its expected size')
+                if monotonic() > deadline:
+                    raise UpdateError('Authenticated GitHub download timed out. Check connectivity and retry.')
+            if cancel.is_set():
+                raise UpdateError('Update cancelled')
+            if process.returncode:
+                raise UpdateError('GitHub CLI could not read the update. Run gh auth login (or gh auth refresh for missing repository access), check that your account can read sbjonesy25/game-stream, then retry. Private-repository updates require access for each user.')
+            output.seek(0)
+            size = 0
+            for block in iter(lambda: output.read(65536), b''):
+                if cancel.is_set():
+                    raise UpdateError('Update cancelled')
+                size += len(block)
+                if size > limit:
+                    raise UpdateError('Update download exceeds its expected size')
+                consume(block)
+        finally:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
 
 
 def version_tuple(version):
@@ -57,8 +114,14 @@ def transfer(url, limit, cancel, consume):
     try:
         with requests.get(url, timeout=(10, 20), stream=True, allow_redirects=False,
                           headers={'Cache-Control': 'no-cache', 'User-Agent': 'Game-Stream-Updater'}) as response:
+            if response.status_code in (401, 403, 404):
+                try:
+                    transfer_authenticated(url.removeprefix(RELEASE_ROOT), limit, cancel, consume)
+                    return
+                except UpdateError as exc:
+                    raise UpdateError(f'GitHub HTTP {response.status_code}. {exc}') from exc
             if response.status_code != 200:
-                raise UpdateError('The update could not be downloaded from GitHub. Try again later.')
+                raise UpdateError(f'GitHub returned HTTP {response.status_code} for the update. Try again later; check ~/.local/state/game-stream/update.log for details.')
             size = 0
             for block in response.iter_content(65536):
                 if cancel.is_set():

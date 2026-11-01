@@ -53,13 +53,18 @@ def test_uninstaller_preserves_settings_and_unknown_files(tmp_path, monkeypatch)
     store.save(DEFAULTS)
     notes = store.path.parent / 'unrelated-notes.txt'
     notes.write_text('keep')
+    update_log = tmp_path / 'state/game-stream/update.log'
+    update_log.parent.mkdir(parents=True)
+    update_log.write_text('Example update diagnostic')
     uninstall.remove_user_install(dry_run=True)
     assert desktop.exists() and root.exists()
     uninstall.remove_user_install()
     assert not desktop.exists() and not root.exists()
     assert store.path.exists() and notes.exists()
+    assert update_log.exists()
     uninstall.remove_user_install(purge=True)
     assert not store.path.exists() and notes.exists()
+    assert not update_log.exists()
     # An arbitrary directory without the managed marker must never be removed.
     root.mkdir()
     (root / 'personal.txt').write_text('keep')
@@ -75,7 +80,7 @@ def test_deb_structure_icons_manifest_and_no_root_pip(tmp_path):
     spec = importlib.util.spec_from_file_location('deb_builder', project / 'scripts/build-deb.py')
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)
-    wheel = tmp_path / 'game_stream-0.2.2-py3-none-any.whl'
+    wheel = tmp_path / 'game_stream-0.2.3-py3-none-any.whl'
     with zipfile.ZipFile(wheel, 'w') as z:
         z.writestr('game_stream/__init__.py', '')
     deb = builder.build(wheel, tmp_path / 'out')

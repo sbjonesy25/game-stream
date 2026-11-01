@@ -116,9 +116,10 @@ Maintainer: Game Stream project <sbjonesy25@users.noreply.github.com>
 Installed-Size: {size}
 Depends: {', '.join(DEPENDS)}
 Homepage: https://github.com/sbjonesy25/game-stream
-Description: Four-pane sports stream viewer with a game catalog
+Recommends: gh
+Description: Four-pane sports stream viewer for Ubuntu
  Displays one to four streams with per-pane audio, fullscreen shortcuts,
- session recovery, sports menus and a configurable source root.
+ session recovery and a configurable three-pane fullscreen layout.
  First launch downloads a private Python and Chromium runtime as the
  current user. Internet access and free disk space are required.
 '''
@@ -165,7 +166,15 @@ def main():
         print(build(args.wheel.resolve(), args.output.resolve()))
     else:
         with tempfile.TemporaryDirectory(prefix='game-stream-wheel-') as temp:
-            subprocess.run([sys.executable, '-m', 'pip', 'wheel', '--no-deps', str(ROOT), '--wheel-dir', temp], check=True)
+            # An isolated build prevents removed modules surviving in a previous
+            # setuptools build/lib tree and leaking back into an installer.
+            project = Path(temp) / 'source'
+            project.mkdir()
+            shutil.copy2(ROOT / 'pyproject.toml', project / 'pyproject.toml')
+            shutil.copy2(ROOT / 'README.md', project / 'README.md')
+            shutil.copytree(ROOT / 'game_stream', project / 'game_stream',
+                            ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
+            subprocess.run([sys.executable, '-m', 'pip', 'wheel', '--no-deps', str(project), '--wheel-dir', temp], check=True)
             print(build(next(Path(temp).glob('game_stream-*.whl')), args.output.resolve()))
 
 

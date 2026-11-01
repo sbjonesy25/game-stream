@@ -1,7 +1,6 @@
 {
-  "root_url": "https://v2.streameast.ga/",
-  "catalog_browser": false,
-  "refresh_on_start": true,
+  "three_pane_layout": "focus",
+  "three_pane_primary": 1,
   "double_tap_ms": 350,
   "audio_border_enabled": true,
   "audio_border_color": "#00ff00",
