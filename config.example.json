@@ -2,5 +2,10 @@
   "root_url": "https://v2.streameast.ga/",
   "catalog_browser": false,
   "refresh_on_start": true,
-  "double_tap_ms": 350
+  "double_tap_ms": 350,
+  "audio_border_enabled": true,
+  "audio_border_color": "#00ff00",
+  "overlay_enabled": true,
+  "overlay_on_shortcuts": true,
+  "overlay_timeout_ms": 2200
 }

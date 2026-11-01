@@ -45,8 +45,6 @@ def load_cookies(path):
 def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
             on_ready=None, on_status=None, auto_play=False):
     """With on_ready, run a browser bridge until cancellation; otherwise discover HLS."""
-    from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout
-    from .bridge import BrowserRelay
     validate_url(url)
     cookies = load_cookies(cookie_file)
     if urlsplit(url).path.lower().endswith('.m3u8'):
@@ -54,13 +52,15 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
         if on_ready:
             on_ready(source)
         return source
+    from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout
+    from .bridge import BrowserRelay
     cancel = cancel or Event()
     with sync_playwright() as p:
         executable = os.environ.get('GAME_STREAM_CHROMIUM') or os.environ.get('STREAMWALL_CHROMIUM')
         if not executable and not os.path.exists(p.chromium.executable_path):
             executable = shutil.which('chromium') or shutil.which('chromium-browser')
         browser = p.chromium.launch(executable_path=executable, headless=not visible,
-            args=['--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
+            args=['--mute-audio', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
                   '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'])
         bridge = None
         announced = False
@@ -159,6 +159,8 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
             if not announced:
                 raise RuntimeError('Cancelled')
         finally:
-            browser.close()
-            if bridge:
-                bridge.close()
+            try:
+                browser.close()
+            finally:
+                if bridge:
+                    bridge.close()

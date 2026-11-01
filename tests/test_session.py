@@ -75,7 +75,7 @@ def test_restore_prompt_accepts_settings_and_only_restarts_active_panes(tmp_path
     wall.show()
     loads = []
     for i, pane in enumerate(wall.panes):
-        pane.load = lambda i=i: loads.append(i)
+        pane.load = lambda i=i, **kwargs: loads.append(i)
     recovery = SessionRecovery(wall, store)
     questions = []
     try:

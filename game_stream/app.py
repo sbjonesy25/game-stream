@@ -6,7 +6,7 @@ from time import monotonic
 # libVLC embeds into an X11 window; XWayland supports this on Ubuntu Wayland.
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEvent, QPoint, QRect, QByteArray
-from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon
+from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon, QPen
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
     QPushButton, QSlider, QVBoxLayout, QWidget, QTextEdit, QPlainTextEdit, QAbstractSpinBox, QMenu)
@@ -15,6 +15,7 @@ from .proxy import Relay
 from .bridge import BrowserRelay
 from .resolver import resolve, validate_url
 from .branding import APP_ID, DISPLAY_NAME, ICON_PATH, configure_application
+from .config import DEFAULTS
 
 
 class FloatingBar(QFrame):
@@ -74,6 +75,12 @@ class VideoInputLayer(QWidget):
         # through fully transparent pixels. This does not reserve video space.
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(0, 0, 0, 1))
+        if self.wall.audio_border_enabled:
+            painter.setPen(QPen(QColor(self.wall.audio_border_color), 1))
+            for pane in self.wall.panes:
+                if pane.isVisible() and pane.audio.isChecked():
+                    rect = QRect(self.mapFromGlobal(pane.mapToGlobal(QPoint())), pane.size())
+                    painter.drawRect(rect.adjusted(0, 0, -1, -1))
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.wall.immersive:
@@ -84,31 +91,35 @@ class VideoInputLayer(QWidget):
 
 
 class ResolverWorker(QThread):
-    resolved = Signal(object)
-    failed = Signal(str)
-    status = Signal(str)
+    resolved = Signal(object, int)
+    failed = Signal(str, int)
+    status = Signal(str, int)
 
-    def __init__(self, url, cookies, visible, parent, auto_play=False):
+    def __init__(self, url, cookies, visible, parent, auto_play=False, generation=0):
         super().__init__(parent)
         self.args = (url, cookies, visible)
         self.cancel = Event()
         self.auto_play = auto_play
+        self.generation = generation
 
     def run(self):
         try:
-            resolve(*self.args, cancel=self.cancel, on_ready=self.resolved.emit,
-                    on_status=self.status.emit, auto_play=self.auto_play)
+            resolve(*self.args, cancel=self.cancel,
+                    on_ready=lambda source: self.resolved.emit(source, self.generation),
+                    on_status=lambda message: self.status.emit(message, self.generation), auto_play=self.auto_play)
         except Exception as exc:
             if self.cancel.is_set():
                 return
             # Browser exceptions can embed signed URLs; show an actionable summary.
             if isinstance(exc, (ValueError, RuntimeError)):
-                self.failed.emit(str(exc))
+                self.failed.emit(str(exc), self.generation)
             else:
-                self.failed.emit('Resolution failed. Check the URL, browser installation, network and cookies.')
+                self.failed.emit('Resolution failed. Check the URL, browser installation, network and cookies.', self.generation)
 
 
 class Pane(QFrame):
+    playback_started = Signal()
+
     def __init__(self, number, wall):
         super().__init__()
         self.wall = wall
@@ -116,7 +127,10 @@ class Pane(QFrame):
         self.worker = None
         self.pending_reload = False
         self.pending_auto_play = False
+        self._request_generation = 0
+        self._pending_request = None
         self.want_playing = False
+        self._disposed = False
         self.relay = None
         self.player = wall.vlc.media_player_new()
         self.player.audio_set_mute(True)
@@ -152,6 +166,10 @@ class Pane(QFrame):
         self.load_button = QPushButton('Load')
         self.load_button.clicked.connect(self.load)
         entry.addWidget(self.load_button)
+        self.paste_button = QPushButton('Paste && Load')
+        self.paste_button.setToolTip('Paste the clipboard URL and load it into this quadrant')
+        self.paste_button.clicked.connect(self.paste_and_load)
+        entry.addWidget(self.paste_button)
         chrome_layout.addWidget(self.entry)
         controls = QHBoxLayout()
         controls.setSpacing(4)
@@ -188,6 +206,35 @@ class Pane(QFrame):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.check_state)
         self.timer.start(750)
+        self.playback_started.connect(self.sync_audio)
+        self._vlc_playing_callback = lambda event: self.playback_started.emit()
+        import vlc
+        self.player.event_manager().event_attach(vlc.EventType.MediaPlayerPlaying, self._vlc_playing_callback)
+
+    def update_audio_border(self):
+        active = self.wall.audio_border_enabled and self.audio.isChecked()
+        # Fullscreen draws above the native VLC window without changing its
+        # geometry. Windowed mode leaves a one-pixel frame around the pane.
+        margin = 1 if active and not self.wall.immersive else 0
+        self.layout.setContentsMargins(margin, margin, margin, margin)
+        color = self.wall.audio_border_color if active and not self.wall.immersive else '#151b29'
+        self.setStyleSheet(f'QFrame#pane {{ background-color: {color}; border: 0; }}')
+
+    def sync_audio(self):
+        if self._disposed:
+            return
+        self.player.audio_set_volume(self.volume.value())
+        self.player.audio_set_mute(not self.audio.isChecked())
+
+    def paste_and_load(self):
+        text = QApplication.clipboard().text().strip()
+        try:
+            validate_url(text)
+        except ValueError:
+            self.status.setText('Clipboard does not contain a valid HTTP or HTTPS link')
+            return
+        self.url.setText(text)
+        self.load()
 
     def set_immersive(self, enabled):
         self.entry.setVisible(not enabled)
@@ -212,34 +259,55 @@ class Pane(QFrame):
                     pane.audio.setChecked(False)
         self.player.audio_set_mute(not enabled)
         self.audio.setText('Audio on' if enabled else 'Audio off')
+        self.wall.refresh_audio_borders()
 
-    def load(self, auto_play=False):
-        if self.worker is not None:
-            self.stop()
-            self.pending_reload = True
-            self.pending_auto_play = auto_play
-            self.want_playing = True
-            self.wall.session_changed()
-            self.load_button.setEnabled(False)
-            self.status.setText('Restarting source browser…')
-            return
+    def load(self, auto_play=False, take_audio=True):
         try:
             validate_url(self.url.text().strip())
         except ValueError as exc:
             self.status.setText(str(exc))
             return
         self.stop()
+        if take_audio:
+            self.wall.select_audio(self)
         self.want_playing = True
         self.wall.session_changed()
+        request = (self._request_generation, self.url.text().strip(), auto_play)
+        if self.worker is not None:
+            self.pending_reload = True
+            self._pending_request = request
+            self.load_button.setEnabled(False)
+            self.status.setText('Closing the previous source browser…')
+            return
+        self.begin_request(request)
+
+    def begin_request(self, request):
+        generation, url, auto_play = request
+        if (generation != self._request_generation or self.wall.closing or
+                not self.want_playing or self.worker is not None):
+            return
         self.status.setText('Open the source player and press Play. Waiting for video…')
         self.load_button.setEnabled(False)
-        self.worker = ResolverWorker(self.url.text().strip(), self.wall.cookie_path,
-                                     self.wall.browser.isChecked(), self, auto_play=auto_play)
-        self.worker.resolved.connect(self.play)
-        self.worker.failed.connect(self.failed)
-        self.worker.status.connect(self.status.setText)
+        self.worker = ResolverWorker(url, self.wall.cookie_path,
+                                     self.wall.browser.isChecked(), self, auto_play=auto_play, generation=generation)
+        # Bound QWidget slots keep all widget/VLC operations on the GUI thread.
+        self.worker.resolved.connect(self.source_ready)
+        self.worker.failed.connect(self.source_failed)
+        self.worker.status.connect(self.source_status)
         self.worker.finished.connect(self.resolver_finished)
         self.worker.start()
+
+    def source_ready(self, source, generation):
+        if generation == self._request_generation:
+            self.play(source)
+
+    def source_failed(self, message, generation):
+        if generation == self._request_generation:
+            self.failed(message)
+
+    def source_status(self, message, generation):
+        if generation == self._request_generation:
+            self.status.setText(message)
 
     def resolver_finished(self):
         worker = self.worker
@@ -249,14 +317,17 @@ class Pane(QFrame):
             worker.deleteLater()
         if self.pending_reload and not self.wall.closing:
             self.pending_reload = False
-            auto_play = self.pending_auto_play
-            QTimer.singleShot(0, lambda: self.load(auto_play=auto_play))
+            request, self._pending_request = self._pending_request, None
+            if request:
+                QTimer.singleShot(0, lambda: self.begin_request(request))
 
     def failed(self, message):
         self.stop()
         self.status.setText(message)
 
     def play(self, source):
+        if self._disposed or self.wall.closing:
+            return
         if self.worker and self.worker.cancel.is_set():
             return
         try:
@@ -269,6 +340,7 @@ class Pane(QFrame):
             self.player.audio_set_volume(self.volume.value())
             self.player.audio_set_mute(not self.audio.isChecked())
             self.player.play()
+            self.sync_audio()
             self.status.setText('Buffering…')
             self.load_button.setEnabled(True)
         except Exception:
@@ -283,6 +355,8 @@ class Pane(QFrame):
             self.status.setText('Source stalled — check its browser or Load again')
             return
         state = self.player.get_state()
+        if state == vlc.State.Playing:
+            self.sync_audio()
         labels = {vlc.State.Playing: 'Playing', vlc.State.Paused: 'Paused',
                   vlc.State.Buffering: 'Buffering…', vlc.State.Ended: 'Stream ended — Load to reconnect',
                   vlc.State.Error: 'Playback failed — stream may have expired. Try Load or browser mode.'}
@@ -290,6 +364,10 @@ class Pane(QFrame):
             self.status.setText(labels[state])
 
     def stop(self):
+        if self._disposed:
+            return
+        self._request_generation += 1
+        self._pending_request = None
         self.want_playing = False
         self.pending_reload = False
         if self.worker:
@@ -302,7 +380,13 @@ class Pane(QFrame):
         self.wall.session_changed()
 
     def dispose(self):
+        if self._disposed:
+            return
         self.stop()
+        self._disposed = True
+        self.timer.stop()
+        import vlc
+        self.player.event_manager().event_detach(vlc.EventType.MediaPlayerPlaying)
         self.player.release()
 
 
@@ -313,6 +397,11 @@ class Wall(QMainWindow):
         self.recovery = None
         self.catalog = None
         self.double_tap_ms = 350
+        self.audio_border_enabled = DEFAULTS['audio_border_enabled']
+        self.audio_border_color = DEFAULTS['audio_border_color']
+        self.overlay_enabled = DEFAULTS['overlay_enabled']
+        self.overlay_on_shortcuts = DEFAULTS['overlay_on_shortcuts']
+        self.overlay_timeout_ms = DEFAULTS['overlay_timeout_ms']
         self._number_tap = None
         self.key_clock = monotonic
         self.cookie_path = ''
@@ -389,6 +478,26 @@ class Wall(QMainWindow):
         if self.recovery:
             self.recovery.changed()
 
+    def refresh_audio_borders(self):
+        for pane in self.panes:
+            pane.update_audio_border()
+        self.video_input.update()
+
+    def apply_view_preferences(self, value):
+        for key in ('audio_border_enabled', 'audio_border_color', 'overlay_enabled',
+                    'overlay_on_shortcuts', 'overlay_timeout_ms'):
+            setattr(self, key, value[key])
+        self.idle.setInterval(self.overlay_timeout_ms or 2200)
+        if not self.overlay_enabled or self.overlay_timeout_ms == 0:
+            self.idle.stop()
+        elif self.tools_overlay.isVisible():
+            self.idle.start()
+        if not self.overlay_enabled:
+            self.hide_controls()
+            self.root.unsetCursor()
+            self.video_input.unsetCursor()
+        self.refresh_audio_borders()
+
     def session_snapshot(self):
         return dict(version=1, pane_count=self.count.currentIndex() + 1,
             panes=[dict(url=p.url.text(), volume=p.volume.value(), audio=p.audio.isChecked(),
@@ -423,9 +532,11 @@ class Wall(QMainWindow):
             self.expand(self.panes[snapshot['expanded']], select_audio=False)
         for pane, row in zip(self.panes[:snapshot['pane_count']], snapshot['panes']):
             if row['active'] and row['url'].strip():
-                pane.load()
+                pane.load(take_audio=False)
 
     def eventFilter(self, watched, event):
+        if watched is self.root and self.immersive and event.type() in (QEvent.Type.Resize, QEvent.Type.Move):
+            QTimer.singleShot(0, self.align_video_input)
         owned = isinstance(watched, QWidget) and watched.window() in self.owned_windows()
         if owned:
             if event.type() == QEvent.Type.KeyPress and self.handle_number_key(event):
@@ -434,9 +545,11 @@ class Wall(QMainWindow):
                     event.button() == Qt.MouseButton.LeftButton and watched in [p.video for p in self.panes]):
                 self.zoom_at(event.globalPosition().toPoint())
                 return True
-        if owned and self.immersive and event.type() in (QEvent.Type.KeyPress, QEvent.Type.MouseButtonPress,
-                                               QEvent.Type.Wheel):
-            self.show_controls()
+        if owned and self.immersive:
+            if event.type() == QEvent.Type.KeyPress:
+                self.show_controls(reason='shortcut')
+            elif event.type() in (QEvent.Type.MouseButtonPress, QEvent.Type.Wheel) and watched is not self.video_input:
+                self.show_controls()
         return super().eventFilter(watched, event)
 
     def owned_windows(self):
@@ -484,7 +597,7 @@ class Wall(QMainWindow):
                 self._number_tap = None
                 self.zoom_shortcut(self.panes[key - 5])
         if self.immersive:
-            self.show_controls()
+            self.show_controls(reason='shortcut')
         return True
 
     def zoom_shortcut(self, pane):
@@ -549,8 +662,10 @@ class Wall(QMainWindow):
             pane.set_immersive(enabled)
             if enabled:
                 pane.url.clearFocus()
+        self.refresh_audio_borders()
         if enabled:
-            QTimer.singleShot(0, self.show_controls)
+            self.position_video_input()
+            QTimer.singleShot(0, lambda: self.show_controls(reason='view'))
 
     def poll_pointer(self):
         if self.closing:
@@ -569,9 +684,23 @@ class Wall(QMainWindow):
         self.last_pointer = point
 
     def position_video_input(self):
-        self.video_input.setGeometry(QRect(self.root.mapToGlobal(QPoint()), self.root.size()))
+        target = self.root.mapToGlobal(QPoint())
+        self.video_input.setGeometry(QRect(target, self.root.size()))
         self.video_input.show()
+        offset = self.video_input.mapToGlobal(QPoint()) - target
+        if not offset.isNull():
+            self.video_input.move(self.video_input.pos() - offset)
         self.video_input.raise_()
+
+    def align_video_input(self):
+        if not self.immersive or self.closing:
+            return
+        if self.video_input.isVisible() or QApplication.activeWindow() in self.owned_windows():
+            self.position_video_input()
+            self.position_controls()
+            for bar in [self.tools_overlay, *[p.overlay for p in self.panes]]:
+                if bar.isVisible():
+                    bar.raise_()
 
     def position_controls(self):
         self.tools_overlay.resize(self.width() - 16, self.tools.sizeHint().height() + 8)
@@ -587,8 +716,21 @@ class Wall(QMainWindow):
                 position = pane.mapToGlobal(pane.rect().bottomLeft())
                 pane.overlay.move(position.x() + (pane.width() - width) // 2, position.y() - height - 5)
 
-    def show_controls(self):
+    def hide_controls(self):
+        self.idle.stop()
+        for bar in [self.tools_overlay, *[p.overlay for p in self.panes]]:
+            bar.animation.stop()
+            bar.hide()
+
+    def show_controls(self, reason='pointer'):
         if not self.immersive or self.closing or QApplication.activeModalWidget():
+            return
+        if not self.overlay_enabled:
+            self.hide_controls()
+            self.root.unsetCursor()
+            self.video_input.unsetCursor()
+            return
+        if reason in ('shortcut', 'view') and not self.overlay_on_shortcuts:
             return
         self.root.unsetCursor()
         self.video_input.unsetCursor()
@@ -609,13 +751,17 @@ class Wall(QMainWindow):
                 pane.overlay.reveal()
             else:
                 pane.overlay.hide()
-        self.idle.start()
+        if self.overlay_timeout_ms:
+            self.idle.start()
+        else:
+            self.idle.stop()
 
     def fade_controls(self):
         # Key presses restart the idle timer; an open dropdown or held mouse
         # button must finish its interaction before controls disappear.
         if QApplication.activePopupWidget() or QApplication.mouseButtons() != Qt.MouseButton.NoButton:
-            self.idle.start()
+            if self.overlay_timeout_ms:
+                self.idle.start()
             return
         self.tools_overlay.fade()
         for pane in self.panes:
@@ -662,7 +808,7 @@ class Wall(QMainWindow):
             self.grid.setRowStretch(i, 1 if i == 0 or count > 2 else 0)
             self.grid.setColumnStretch(i, 1 if i == 0 or count > 1 else 0)
         if self.immersive:
-            QTimer.singleShot(0, self.show_controls)
+            QTimer.singleShot(0, lambda: self.show_controls(reason='view'))
 
     def expand(self, pane, select_audio=True):
         if not self.pane_enabled(pane):
@@ -680,7 +826,7 @@ class Wall(QMainWindow):
         pane.full.setText('Restore grid')
         pane.show()
         if self.immersive:
-            QTimer.singleShot(0, self.show_controls)
+            QTimer.singleShot(0, lambda: self.show_controls(reason='view'))
 
     def toggle_fullscreen(self):
         self.showNormal() if self.isFullScreen() else self.showFullScreen()

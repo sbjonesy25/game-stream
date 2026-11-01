@@ -5,6 +5,7 @@ from pathlib import Path
 import subprocess
 import sys
 import zipfile
+import tarfile
 
 import pytest
 from game_stream import bootstrap, uninstall
@@ -74,10 +75,17 @@ def test_deb_structure_icons_manifest_and_no_root_pip(tmp_path):
     spec = importlib.util.spec_from_file_location('deb_builder', project / 'scripts/build-deb.py')
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)
-    wheel = tmp_path / 'game_stream-0.2.0-py3-none-any.whl'
+    wheel = tmp_path / 'game_stream-0.2.1-py3-none-any.whl'
     with zipfile.ZipFile(wheel, 'w') as z:
         z.writestr('game_stream/__init__.py', '')
     deb = builder.build(wheel, tmp_path / 'out')
+    standalone = deb.parent / 'uninstall-game-stream.sh'
+    bundle = next(deb.parent.glob('game-stream-uninstaller_*.tar.gz'))
+    with tarfile.open(bundle) as archive:
+        assert archive.extractfile('uninstall-game-stream.sh').read() == standalone.read_bytes()
+    result = subprocess.run(['bash', str(standalone), '--dry-run'], capture_output=True, text=True, timeout=15)
+    assert result.returncode == 0, result.stderr
+    assert 'Dry run complete' in result.stdout
     fields = subprocess.check_output(['dpkg-deb', '--field', str(deb)]).decode()
     assert 'Architecture: amd64' in fields
     assert 'python3-venv' in fields
@@ -104,3 +112,34 @@ def test_runtime_root_refuses_unowned_data(tmp_path):
     with pytest.raises(RuntimeError):
         bootstrap.prepare_root(tmp_path)
     assert (tmp_path / 'important.txt').read_text() == 'keep'
+
+
+def test_cleanup_current_setup_removes_only_its_editable_console_package(tmp_path):
+    import shutil
+    project = Path(__file__).resolve().parent.parent
+    checkout = tmp_path / 'old checkout'
+    (checkout / 'scripts').mkdir(parents=True)
+    script = checkout / 'scripts/uninstall-current-setup.sh'
+    shutil.copy2(project / 'scripts/uninstall-current-setup.sh', script)
+    helper = checkout / 'scripts/uninstall.sh'
+    helper.write_text('#!/bin/sh\nexit 0\n')
+    helper.chmod(0o755)
+    venv = checkout / '.venv'
+    subprocess.run([sys.executable, '-m', 'venv', str(venv)], check=True)
+    site = next((venv / 'lib').glob('python*/site-packages'))
+    metadata = site / 'game_stream-0.1.0.dist-info'
+    metadata.mkdir()
+    (metadata / 'METADATA').write_text('Metadata-Version: 2.1\nName: game-stream\nVersion: 0.1.0\n')
+    (metadata / 'direct_url.json').write_text(json.dumps({'url': checkout.as_uri(), 'dir_info': {'editable': True}}))
+    cli = venv / 'bin/game-stream'
+    cli.write_text('#!/bin/sh\nexit 0\n')
+    (metadata / 'RECORD').write_text('\n'.join([
+        'game_stream-0.1.0.dist-info/METADATA,,', 'game_stream-0.1.0.dist-info/direct_url.json,,',
+        'game_stream-0.1.0.dist-info/RECORD,,', '../../../bin/game-stream,,', '']))
+    preview = subprocess.run(['bash', str(script), '--dry-run'], capture_output=True, text=True, check=True)
+    assert 'Would remove this checkout' in preview.stdout
+    assert cli.exists()
+    subprocess.run(['bash', str(script)], capture_output=True, text=True, check=True)
+    assert not cli.exists()
+    assert (venv / 'bin/python').exists()
+    assert (checkout / 'scripts/uninstall-current-setup.sh').exists()

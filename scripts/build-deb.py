@@ -10,6 +10,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
+import io
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -31,6 +33,32 @@ def text(path, value, executable=False):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(value, encoding='utf-8')
     path.chmod(0o755 if executable else 0o644)
+
+
+def uninstaller_script():
+    source = (ROOT / 'game_stream/uninstall.py').read_text()
+    return ('#!/bin/sh\n# Standalone Game Stream uninstaller; run as your desktop user.\n'
+            'exec python3 - "$@" <<\'GAME_STREAM_UNINSTALL_PY\'\n' + source + '\nGAME_STREAM_UNINSTALL_PY\n')
+
+
+def build_uninstaller(output, version):
+    script = output / 'uninstall-game-stream.sh'
+    text(script, uninstaller_script(), True)
+    bundle = output / f'game-stream-uninstaller_{version}.tar.gz'
+    readme = ('Close Game Stream first. Run as your normal desktop user:\n'
+              '  bash uninstall-game-stream.sh\n'
+              'Preview with --dry-run. Add --purge-user-data to remove preferences/session/cache.\n'
+              'Settings and the source checkout/.venv are kept by default.\n'
+              'If a system package is installed, sudo is requested to remove it.\n')
+    with tarfile.open(bundle, 'w:gz') as archive:
+        for name, body, mode in [('uninstall-game-stream.sh', script.read_bytes(), 0o755),
+                                 ('README.txt', readme.encode(), 0o644)]:
+            entry = tarfile.TarInfo(name)
+            entry.size, entry.mode = len(body), mode
+            entry.uid = entry.gid = 0
+            entry.uname = entry.gname = 'root'
+            archive.addfile(entry, io.BytesIO(body))
+    return script, bundle
 
 
 def build(wheel, output):
@@ -116,8 +144,9 @@ exit 0
             subprocess.run(['desktop-file-validate', str(stage / 'usr/share/applications/game-stream.desktop')], check=True)
         deb = output / f'game-stream_{version}_amd64.deb'
         subprocess.run(['dpkg-deb', '--root-owner-group', '-Zxz', '--build', str(stage), str(deb)], check=True)
-        sha = hashlib.sha256(deb.read_bytes()).hexdigest()
-        text(output / 'SHA256SUMS', f'{sha}  {deb.name}\n')
+        companions = build_uninstaller(output, version)
+        text(output / 'SHA256SUMS', ''.join(f'{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n'
+                                           for p in (deb, *companions)))
         return deb
 
 

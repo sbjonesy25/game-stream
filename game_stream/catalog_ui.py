@@ -5,7 +5,9 @@ from threading import Event
 
 from PySide6.QtCore import QObject, QThread, Signal
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFormLayout, QVBoxLayout,
-                              QLineEdit, QCheckBox, QSpinBox, QLabel, QMessageBox)
+                              QLineEdit, QCheckBox, QSpinBox, QLabel, QMessageBox, QPushButton,
+                              QHBoxLayout, QColorDialog)
+from PySide6.QtGui import QColor
 from .config import ConfigStore, DEFAULTS
 from .catalog import CatalogCache, CatalogError, fetch_games
 
@@ -49,10 +51,34 @@ class PreferencesDialog(QDialog):
         self.interval.setSingleStep(50)
         self.interval.setSuffix(' ms')
         self.interval.setValue(current['double_tap_ms'])
+        self.border_enabled = QCheckBox('Outline the selected audio source')
+        self.border_enabled.setChecked(current['audio_border_enabled'])
+        self.border_color = QLineEdit(current['audio_border_color'])
+        self.border_color.setMaxLength(7)
+        color_row = QHBoxLayout()
+        color_row.addWidget(self.border_color)
+        choose = QPushButton('Choose…')
+        choose.clicked.connect(self.choose_color)
+        color_row.addWidget(choose)
+        self.overlays = QCheckBox('Show fullscreen controls on mouse movement')
+        self.overlays.setChecked(current['overlay_enabled'])
+        self.shortcut_overlays = QCheckBox('Also show controls after audio / fullscreen shortcuts')
+        self.shortcut_overlays.setChecked(current['overlay_on_shortcuts'])
+        self.overlay_delay = QSpinBox()
+        self.overlay_delay.setRange(0, 30000)
+        self.overlay_delay.setSingleStep(250)
+        self.overlay_delay.setSuffix(' ms')
+        self.overlay_delay.setSpecialValueText('Keep visible')
+        self.overlay_delay.setValue(current['overlay_timeout_ms'])
         form.addRow('Sports root page', self.root)
         form.addRow('', self.browser)
         form.addRow('', self.refresh_start)
         form.addRow('Double-tap 1–4 interval', self.interval)
+        form.addRow('Audio border (1 pixel)', self.border_enabled)
+        form.addRow('Border color', color_row)
+        form.addRow('Fullscreen overlays', self.overlays)
+        form.addRow('', self.shortcut_overlays)
+        form.addRow('Overlay idle duration', self.overlay_delay)
         box.addLayout(form)
         hint = QLabel('Games → sport → game → quadrant loads a stream. Refresh Games updates the list without interrupting playback.')
         hint.setWordWrap(True)
@@ -65,12 +91,23 @@ class PreferencesDialog(QDialog):
         buttons.rejected.connect(self.reject)
         box.addWidget(buttons)
 
+    def choose_color(self):
+        color = QColorDialog.getColor(QColor(self.border_color.text()), self, 'Audio source border')
+        if color.isValid():
+            self.border_color.setText(color.name())
+
     def save(self):
         try:
             self.saved = self.store.save(dict(root_url=self.root.text(), catalog_browser=self.browser.isChecked(),
-                refresh_on_start=self.refresh_start.isChecked(), double_tap_ms=self.interval.value()))
-        except (OSError, ValueError):
-            QMessageBox.warning(self, 'Preferences not saved', 'Check the root URL and configuration directory permissions.')
+                refresh_on_start=self.refresh_start.isChecked(), double_tap_ms=self.interval.value(),
+                audio_border_enabled=self.border_enabled.isChecked(), audio_border_color=self.border_color.text(),
+                overlay_enabled=self.overlays.isChecked(), overlay_on_shortcuts=self.shortcut_overlays.isChecked(),
+                overlay_timeout_ms=self.overlay_delay.value()))
+        except ValueError as exc:
+            QMessageBox.warning(self, 'Preferences not saved', str(exc))
+            return
+        except OSError:
+            QMessageBox.warning(self, 'Preferences not saved', 'Check the configuration directory permissions and free space.')
             return
         self.accept()
 
@@ -109,6 +146,7 @@ class CatalogController(QObject):
             self.games, self.updated = self.cache.load(value['root_url'])
         self.preferences = value
         self.wall.double_tap_ms = value['double_tap_ms']
+        self.wall.apply_view_preferences(value)
 
     def open_preferences(self):
         try:

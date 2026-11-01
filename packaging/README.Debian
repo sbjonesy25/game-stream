@@ -2,7 +2,7 @@ Game Stream for Ubuntu amd64
 ===========================
 
 Install with:
-  sudo apt install ./game-stream_0.2.0_amd64.deb
+  sudo apt install ./game-stream_0.2.1_amd64.deb
 
 Open Applications > Game Stream. First launch requires internet and about 2 GB
 of free disk space for its private Python dependencies and Chromium browser.
@@ -27,3 +27,12 @@ runtime too. Never run the application itself with sudo.
 Ubuntu 22.04/24.04/26.04 amd64 with Python 3.10-3.15 is the intended target.
 Other desktop Linux distributions can use the documented source installation.
 This is not an Android APK and does not run on Android.
+
+Standalone uninstall tools are also distributed with each release:
+  bash uninstall-game-stream.sh [--dry-run] [--purge-user-data]
+The game-stream-uninstaller_0.2.1.tar.gz bundle contains this script and instructions.
+
+Release 0.2.1 adds exclusive audio on load, a configurable one-pixel audio border,
+Paste & Load, configurable fullscreen overlay duration/visibility, and guarded
+browser replacement that closes the old source before creating its replacement.
+Fresh preferences use https://v2.streameast.ga/ as the root page.

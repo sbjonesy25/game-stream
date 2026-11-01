@@ -8,11 +8,11 @@ The normal viewing window does not embed the source website.
 
 ## Shareable Ubuntu installer
 
-Download **[game-stream_0.2.0_amd64.deb](releases/game-stream_0.2.0_amd64.deb)**
+Download **[game-stream_0.2.1_amd64.deb](releases/game-stream_0.2.1_amd64.deb)**
 from `releases/` and install with:
 
 ```bash
-sudo apt install ./game-stream_0.2.0_amd64.deb
+sudo apt install ./game-stream_0.2.1_amd64.deb
 ```
 
 This is the Ubuntu/Linux installer; Android APK files do not run on Ubuntu.
@@ -30,9 +30,12 @@ A failed update keeps the previous working runtime until a replacement is ready.
 The small `.deb` is intentionally not an offline runtime bundle. SHA256 checksums
 are included in `releases/SHA256SUMS`.
 
-Build a fresh package from a configured source checkout with
-`./scripts/build-deb.sh` (requires `dpkg-deb`). It writes the installer and checksum
-to `releases/`. The package and its checksum are tracked in this repository for
+For every application update, bump the patch version and run
+`./scripts/release.sh` (requires `dpkg-deb`). It rebuilds the `.deb`, standalone
+uninstall `.sh` and uninstaller bundle, runs the test suite, and verifies that
+packaged source/icons/helpers/README match the checkout. `scripts/check-release.py`
+fails on stale artifacts. Stage and push all rebuilt artifacts with the source.
+For build-only use `./scripts/build-deb.sh`. Outputs and checksums go to `releases/`. The package and its checksum are tracked in this repository for
 sharing. Native apt installation on each Ubuntu release still needs a host test;
 validation here builds/extracts the package, validates the launcher, checks the
 bundled wheel checksum, and tests the user-runtime update/rollback logic. A real
@@ -224,7 +227,12 @@ Preferences are saved to `~/.config/game-stream/config.json` (or
   "root_url": "https://v2.streameast.ga/",
   "catalog_browser": false,
   "refresh_on_start": true,
-  "double_tap_ms": 350
+  "double_tap_ms": 350,
+  "audio_border_enabled": true,
+  "audio_border_color": "#00ff00",
+  "overlay_enabled": true,
+  "overlay_on_shortcuts": true,
+  "overlay_timeout_ms": 2200
 }
 ```
 
@@ -242,6 +250,43 @@ can produce no games. The development cloud cannot access the live configured
 root, so live root-page behavior needs testing on your Ubuntu host. Local static
 and JavaScript-rendered indexes are tested, and the saved site HTML supplied
 previously yielded its NFL game link.
+
+### Audio border, loading and overlay preferences
+
+The selected audio source has a **one-pixel green border** by default. Preferences
+lets you disable it or choose another six-digit hex color (for example `#00ff00`).
+Fullscreen paints the border above VLC without changing the video geometry or
+2-pixel quadrant spacing. Windowed mode uses a one-pixel pane frame. This marks
+the selected audio source, including while it buffers or is paused; manual mixed
+audio highlights each selected source.
+
+**Load**, **Paste & Load**, and Games-menu selections now give the target pane
+exclusive audio, even when Solo audio is unchecked. Other panes are muted. Session
+recovery preserves the saved audio/mute state rather than selecting a different
+source for every restored link. Chromium source windows are always silent; VLC
+owns sound output, and its Playing event reapplies the selected mute/volume state.
+
+**Paste & Load**, next to Load, validates the clipboard as an HTTP/HTTPS link,
+pastes it and starts loading. Invalid clipboard text leaves the current link and
+stream alone. Replacing a loaded link closes that pane's associated browser before
+starting its replacement. Newer requests supersede queued ones; Stop cancels
+queued restarts too. Other Chromium windows/applications are never terminated.
+Editing an input field alone does not stop playback; loading the replacement does.
+
+Preferences also controls fullscreen overlays:
+
+- `overlay_timeout_ms`: idle duration, default **2200 ms**; **0** keeps revealed
+  controls visible until leaving fullscreen or switching applications.
+- `overlay_on_shortcuts`: disable automatic controls after audio/zoom/fullscreen
+  actions, while retaining mouse-triggered controls.
+- `overlay_enabled`: disable all fullscreen control overlays. Keyboard shortcuts,
+  double-click zoom and the audio border still work. Press F11/Esc to return to
+  the normal window and change Preferences.
+
+The config file accepts `audio_border_enabled`, `audio_border_color`,
+`overlay_enabled`, `overlay_on_shortcuts`, and `overlay_timeout_ms`. Older config
+files gain safe defaults automatically. Fresh installations default to
+`https://v2.streameast.ga/`; existing user root overrides are preserved.
 
 ### Keyboard and double-click controls
 
@@ -364,6 +409,38 @@ and keeps per-user runtime/data. No package-removal hook scans or deletes user
 home directories. Reinstalling can reuse the saved session. Other users can run
 the uninstall helper for their own user-specific files before package removal.
 
+### Remove the current source setup before testing the installer
+
+Close Game Stream, then from this checkout run:
+
+```bash
+git pull
+./scripts/uninstall-current-setup.sh --dry-run
+./scripts/uninstall-current-setup.sh
+sudo apt install ./releases/game-stream_0.2.1_amd64.deb
+```
+
+This removes old launcher/icon registration and only an editable console package
+that belongs to this checkout, avoiding PATH conflicts with `/usr/bin/game-stream`.
+The checkout, virtual environment/dependencies, original cookie files and saved
+settings remain. Add `--purge-user-data` only if you want a fresh session and
+preferences too. Custom/symlinked environments and unrelated package installs
+are left alone. Launch the installed app from Applications afterward.
+
+The installer already provides **`game-stream-uninstall`**. A separate
+**[`game-stream-uninstaller_0.2.1.tar.gz`](releases/game-stream-uninstaller_0.2.1.tar.gz)**
+bundle and **[`uninstall-game-stream.sh`](releases/uninstall-game-stream.sh)**
+are also included in `releases/`; they work without a checkout or Qt/Python app
+runtime. Run `bash uninstall-game-stream.sh` as your normal desktop user. The
+same `--dry-run` and `--purge-user-data` options apply.
+
+### macOS
+
+The architecture can be ported to macOS, but this release is Linux-only. A Mac
+version needs the Cocoa Qt backend, VLC NSView embedding instead of `set_xwindow`,
+Mac-specific fullscreen/input handling, and a separate `.app`/`.dmg` build and
+test pass for Intel/Apple Silicon. The `.deb` does not install on a Mac.
+
 ## Development and validation
 
 ```bash
@@ -378,7 +455,7 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `GAME_STREAM_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **42 tests passed on Python 3.12 and 3.14** with
+Current development validation: **50 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
@@ -394,7 +471,10 @@ paths containing spaces and special characters. Added checks cover double-tap
 timing and audio/zoom parity, multi-sport parsing, rendered index discovery,
 config/cache validation, target-quadrant menu actions, failed refresh retention,
 in-flight root changes, safe uninstall ownership checks, package contents, and
-runtime staging/failed-update rollback. All imported Qt modules are supplied by
+runtime staging/failed-update rollback. New regression checks cover exclusive
+load audio, native Playing mute reapplication, one-pixel border rendering/colors,
+clipboard validation, overlay options, serialized browser replacement, stale
+callbacks, cancelled queued restarts, and source-environment cleanup. All imported Qt modules are supplied by
 PySide6-Essentials; unused Qt WebEngine/Addons are not required by fresh installs.
 Browser install dry runs verify download selection for Ubuntu 22.04,
 24.04 and 26.04 x64 without downloading browsers or changing system packages.

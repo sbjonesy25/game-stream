@@ -1,12 +1,15 @@
 """User-editable preferences and private atomic JSON persistence."""
 import json
 import os
+import re
 from pathlib import Path
 import tempfile
 from .resolver import validate_url
 
 DEFAULTS = dict(root_url='https://v2.streameast.ga/', catalog_browser=False,
-                refresh_on_start=True, double_tap_ms=350)
+                refresh_on_start=True, double_tap_ms=350, audio_border_enabled=True,
+                audio_border_color='#00ff00', overlay_enabled=True,
+                overlay_on_shortcuts=True, overlay_timeout_ms=2200)
 
 
 def xdg_path(variable, fallback, suffix):
@@ -45,7 +48,13 @@ class ConfigStore:
         value['root_url'] = validate_url(value['root_url'].strip())
         if type(value['double_tap_ms']) is not int or not 150 <= value['double_tap_ms'] <= 800:
             raise ValueError('Double-tap interval must be 150–800 ms')
-        if any(type(value[k]) is not bool for k in ('catalog_browser', 'refresh_on_start')):
+        if (not isinstance(value['audio_border_color'], str) or
+                not re.fullmatch(r'#[0-9a-fA-F]{6}', value['audio_border_color'])):
+            raise ValueError('Audio border color must be a six-digit hex color, such as #00ff00')
+        if type(value['overlay_timeout_ms']) is not int or not 0 <= value['overlay_timeout_ms'] <= 30000:
+            raise ValueError('Overlay duration must be 0–30000 ms')
+        if any(type(value[k]) is not bool for k in ('catalog_browser', 'refresh_on_start',
+                'audio_border_enabled', 'overlay_enabled', 'overlay_on_shortcuts')):
             raise ValueError('Invalid preferences')
         return {key: value[key] for key in DEFAULTS}
 
