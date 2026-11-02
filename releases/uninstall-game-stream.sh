@@ -39,7 +39,44 @@ def user_files(purge=False):
     return paths
 
 
+def purge_debug(dry_run=False):
+    # Kept stdlib-only so the standalone uninstaller does not need the app runtime.
+    root = xdg('XDG_STATE_HOME', '.local/state') / APP_ID / 'debug'
+    def marker(path):
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+        with os.fdopen(fd, encoding='utf-8') as stream:
+            return json.loads(stream.read(65536))
+    try:
+        if root.is_symlink() or marker(root / '.game-stream-debug.json') != {'kind': 'game-stream-diagnostics-v1'}:
+            return
+    except (OSError, ValueError):
+        return
+    for directory in root.iterdir():
+        if directory.is_symlink() or not directory.is_dir():
+            continue
+        try:
+            info = marker(directory / '.game-stream-capture.json')
+            if info.get('kind') != 'game-stream-diagnostics-v1':
+                continue
+            pid, ticks = info.get('monitor_pid'), info.get('monitor_start_ticks')
+            if type(pid) is int and ticks is not None:
+                try:
+                    current = int(Path(f'/proc/{pid}/stat').read_text().rsplit(')', 1)[1].split()[19])
+                    if current == ticks:
+                        print('Kept active debug capture: ' + str(directory))
+                        continue
+                except (OSError, ValueError, IndexError):
+                    pass
+        except (OSError, ValueError, AttributeError):
+            continue
+        print(('Would remove ' if dry_run else 'Removing ') + str(directory))
+        if not dry_run:
+            shutil.rmtree(directory)
+
+
 def remove_user_install(purge=False, dry_run=False):
+    if purge:
+        purge_debug(dry_run)
     for path in user_files(purge):
         if path.exists() or path.is_symlink():
             print(('Would remove ' if dry_run else 'Removing ') + str(path))
@@ -74,7 +111,7 @@ def package_installed():
 
 def main():
     parser = argparse.ArgumentParser(description='Uninstall Game Stream. Close the app first. Settings are kept by default.')
-    parser.add_argument('--purge-user-data', action='store_true', help='Also delete this user\'s preferences, session and game cache')
+    parser.add_argument('--purge-user-data', action='store_true', help='Also delete this user\'s preferences, session, game cache and inactive debug captures')
     parser.add_argument('--dry-run', action='store_true', help='Print removal actions without changing anything')
     args = parser.parse_args()
     try:
@@ -90,7 +127,7 @@ def main():
         return 1
     print('Game Stream uninstall complete.' if not args.dry_run else 'Dry run complete.')
     if not args.purge_user_data:
-        print('Preferences, saved session and game cache kept. Checkout and source .venv are never deleted.')
+        print('Preferences, saved session, game cache and debug captures kept. Checkout and source .venv are never deleted.')
     return 0
 
 

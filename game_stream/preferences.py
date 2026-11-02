@@ -1,5 +1,5 @@
 """Appearance preferences without a background catalog or site requests."""
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Qt
 from PySide6.QtWidgets import (QDialog, QDialogButtonBox, QFormLayout, QVBoxLayout,
                               QLineEdit, QCheckBox, QSpinBox, QLabel, QMessageBox,
                               QPushButton, QHBoxLayout, QColorDialog, QComboBox, QTabWidget, QWidget)
@@ -19,12 +19,18 @@ class PreferencesDialog(QDialog):
         tabs = QTabWidget()
         playback = QWidget()
         appearance = QWidget()
+        numbers = QWidget()
+        diagnostics = QWidget()
         updates = QWidget()
         playback_form = QFormLayout(playback)
         form = QFormLayout(appearance)
+        numbers_form = QFormLayout(numbers)
+        diagnostics_box = QVBoxLayout(diagnostics)
         updates_box = QVBoxLayout(updates)
         tabs.addTab(playback, 'Playback')
         tabs.addTab(appearance, 'Appearance')
+        tabs.addTab(numbers, 'Quadrant numbers')
+        tabs.addTab(diagnostics, 'Diagnostics')
         tabs.addTab(updates, 'Updates')
         box.addWidget(tabs)
         self.browser = QCheckBox('Show the source browser while resolving a stream')
@@ -87,6 +93,27 @@ class PreferencesDialog(QDialog):
                               ('Bottom left', 'bottom-left'), ('Bottom right', 'bottom-right')]:
             self.number_corner.addItem(label, corner)
         self.number_corner.setCurrentIndex(self.number_corner.findData(current['quadrant_label_corner']))
+        self.number_x = QSpinBox()
+        self.number_y = QSpinBox()
+        for control, key in ((self.number_x, 'quadrant_label_offset_x'), (self.number_y, 'quadrant_label_offset_y')):
+            control.setRange(0, 500)
+            control.setSuffix(' px')
+            control.setValue(current[key])
+        self.number_opacity = QSpinBox()
+        self.number_opacity.setRange(0, 100)
+        self.number_opacity.setSuffix(' %')
+        self.number_opacity.setValue(current['quadrant_label_opacity_percent'])
+        self.number_display = QComboBox()
+        self.number_display.addItem('Always on', 'always')
+        self.number_display.addItem('Fade after mouse / audio / layout activity', 'timed')
+        self.number_display.setCurrentIndex(self.number_display.findData(current['quadrant_label_display']))
+        self.number_delay = QSpinBox()
+        self.number_delay.setRange(250, 30000)
+        self.number_delay.setSingleStep(250)
+        self.number_delay.setSuffix(' ms')
+        self.number_delay.setValue(current['quadrant_label_timeout_ms'])
+        self.number_display.currentIndexChanged.connect(lambda: self.number_delay.setEnabled(self.number_display.currentData() == 'timed'))
+        self.number_delay.setEnabled(self.number_display.currentData() == 'timed')
         self.three_layout = QComboBox()
         self.three_layout.addItem('Large stream + two (fullscreen)', 'focus')
         self.three_layout.addItem('Grid', 'grid')
@@ -105,9 +132,47 @@ class PreferencesDialog(QDialog):
         form.addRow('Overlay idle duration', self.overlay_delay)
         form.addRow('Overlay opacity', self.opacity)
         form.addRow('Button text size', self.text_size)
-        form.addRow('Quadrant numbers', self.number_labels)
-        form.addRow('Number size', self.number_size)
-        form.addRow('Number corner', self.number_corner)
+        numbers_form.addRow('Quadrant numbers', self.number_labels)
+        numbers_form.addRow('Number size', self.number_size)
+        numbers_form.addRow('Corner', self.number_corner)
+        numbers_form.addRow('Horizontal inset', self.number_x)
+        numbers_form.addRow('Vertical inset', self.number_y)
+        numbers_form.addRow('Opacity', self.number_opacity)
+        numbers_form.addRow('Display', self.number_display)
+        numbers_form.addRow('Idle delay before fading', self.number_delay)
+        number_hint = QLabel('Offsets are measured inward from the selected corner and stay within the video. '
+                            'Number timing is independent of the fullscreen controls.')
+        number_hint.setWordWrap(True)
+        numbers_form.addRow(number_hint)
+        self.debug_enabled = QCheckBox('Record resource diagnostics from startup')
+        self.debug_enabled.setChecked(current['debug_enabled'])
+        diagnostics_box.addWidget(self.debug_enabled)
+        debug = getattr(parent, 'debug_capture', None)
+        debug_hint = QLabel('Save to enable debug mode; you can restart now or record on the next launch. '
+            'Each launch gets a fresh folder. The latest five runs are kept, with bounded logs. '
+            'The separate sampler records memory, swap, CPU and interface heartbeats, even if the app stalls. '
+            'No stream links, cookies, browser pages or memory dumps are recorded.')
+        debug_hint.setWordWrap(True)
+        diagnostics_box.addWidget(debug_hint)
+        self.debug_path = QLabel(f'Debug folder: {debug.capture.root}' if debug else 'Diagnostics are available when running the application.')
+        self.debug_path.setWordWrap(True)
+        self.debug_path.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        diagnostics_box.addWidget(self.debug_path)
+        self.debug_status = QLabel()
+        self.debug_status.setWordWrap(True)
+        self.debug_status.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        diagnostics_box.addWidget(self.debug_status)
+        if debug:
+            self.refresh_debug_status()
+        for title, method, enabled in [('Open debug folder', 'open_folder', bool(debug)),
+                ('Start fresh capture now', 'fresh_capture', bool(debug) and current['debug_enabled']),
+                ('Clear all debug captures…', 'clear', bool(debug))]:
+            button = QPushButton(title)
+            button.setEnabled(enabled)
+            if debug:
+                button.clicked.connect(lambda checked=False, method=method: self.debug_action(method))
+            diagnostics_box.addWidget(button)
+        diagnostics_box.addStretch()
         hint = QLabel('Alt+1–4: visible pane count. Shift+1–3: large stream in three-pane mode. '
                       'F / F11: fullscreen. Reducing the pane count stops hidden streams; their links are kept.')
         hint.setWordWrap(True)
@@ -130,6 +195,15 @@ class PreferencesDialog(QDialog):
         buttons.rejected.connect(self.reject)
         box.addWidget(buttons)
 
+    def refresh_debug_status(self):
+        debug = self.parent().debug_capture
+        running = bool(debug.capture.process and debug.capture.process.poll() is None)
+        self.debug_status.setText(f'Current capture: {debug.capture.directory}' if running else 'Not recording in this session.')
+
+    def debug_action(self, method):
+        getattr(self.parent().debug_capture, method)()
+        self.refresh_debug_status()
+
     def choose_color(self):
         color = QColorDialog.getColor(QColor(self.border_color.text()), self, 'Audio source border')
         if color.isValid():
@@ -145,7 +219,11 @@ class PreferencesDialog(QDialog):
                 button_text_size=self.text_size.value(), solo_audio=self.solo.isChecked(), show_browser=self.browser.isChecked(),
                 theme=self.theme.currentData(), browser_max_height=self.quality.currentData(),
                 quadrant_labels_enabled=self.number_labels.isChecked(), quadrant_label_size=self.number_size.value(),
-                quadrant_label_corner=self.number_corner.currentData()))
+                quadrant_label_corner=self.number_corner.currentData(),
+                quadrant_label_offset_x=self.number_x.value(), quadrant_label_offset_y=self.number_y.value(),
+                quadrant_label_opacity_percent=self.number_opacity.value(),
+                quadrant_label_display=self.number_display.currentData(), quadrant_label_timeout_ms=self.number_delay.value(),
+                debug_enabled=self.debug_enabled.isChecked()))
         except ValueError as exc:
             QMessageBox.warning(self, 'Preferences not saved', str(exc))
             return False
@@ -206,7 +284,10 @@ class PreferencesController(QObject):
         saved, requested = dialog.saved, dialog.update_requested
         dialog.deleteLater()
         if accepted:
+            debug_changed = self.preferences['debug_enabled'] != saved['debug_enabled']
             self.apply(saved)
+            if debug_changed and self.wall.debug_capture and (not requested or not saved['debug_enabled']):
+                self.wall.debug_capture.changed(saved['debug_enabled'])
             if requested:
                 # Launch only after the preferences modal has closed.
                 self.wall.update_action.trigger()

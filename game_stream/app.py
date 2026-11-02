@@ -5,7 +5,7 @@ from time import monotonic
 
 # libVLC embeds into an X11 window; XWayland supports this on Ubuntu Wayland.
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
-from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEvent, QPoint, QRect, QByteArray
+from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QVariantAnimation, QEvent, QPoint, QRect, QByteArray
 from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon, QPen, QActionGroup, QAction
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
@@ -87,12 +87,14 @@ class VideoInputLayer(QWidget):
                     rect = QRect(self.mapFromGlobal(pane.mapToGlobal(QPoint())), pane.size())
                     painter.drawRect(rect.adjusted(0, 0, -1, -1))
         if self.wall.quadrant_labels_enabled:
+            painter.setOpacity(self.wall.number_opacity())
             font = label_font(self.wall.quadrant_label_size)
             size = label_size(font)
             for pane in self.wall.panes:
                 if pane.isVisible():
                     video = QRect(self.mapFromGlobal(pane.video.mapToGlobal(QPoint())), pane.video.size())
-                    paint_label(painter, label_rect(video, size, self.wall.quadrant_label_corner), pane.number, font)
+                    paint_label(painter, label_rect(video, size, self.wall.quadrant_label_corner,
+                                self.wall.quadrant_label_offset_x, self.wall.quadrant_label_offset_y), pane.number, font)
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.wall.immersive:
@@ -412,12 +414,24 @@ class Wall(QMainWindow):
         self.vlc = instance
         self.recovery = None
         self.preferences = None
+        self.debug_capture = None
+        self.restart_requested = False
         self.shortcuts_dialog = None
         self.theme = DEFAULTS['theme']
         self.browser_max_height = DEFAULTS['browser_max_height']
         self.quadrant_labels_enabled = DEFAULTS['quadrant_labels_enabled']
         self.quadrant_label_size = DEFAULTS['quadrant_label_size']
         self.quadrant_label_corner = DEFAULTS['quadrant_label_corner']
+        for key in ('quadrant_label_offset_x', 'quadrant_label_offset_y', 'quadrant_label_opacity_percent',
+                    'quadrant_label_display', 'quadrant_label_timeout_ms'):
+            setattr(self, key, DEFAULTS[key])
+        self.number_alpha = 1.0
+        self.number_idle = QTimer(self)
+        self.number_idle.setSingleShot(True)
+        self.number_idle.timeout.connect(self.fade_numbers)
+        self.number_fade = QVariantAnimation(self)
+        self.number_fade.setDuration(250)
+        self.number_fade.valueChanged.connect(self.set_number_alpha)
         self.setStyleSheet(stylesheet(self.theme))
         self.updater = None
         self.double_tap_ms = 350
@@ -523,7 +537,27 @@ class Wall(QMainWindow):
         for pane in self.panes:
             pane.update_audio_border()
         self.video_input.update()
+        self.reveal_numbers()
+
+    def number_opacity(self):
+        return self.number_alpha * self.quadrant_label_opacity_percent / 100
+
+    def set_number_alpha(self, value):
+        self.number_alpha = float(value)
+        self.video_input.update()
         self.position_number_badges()
+
+    def reveal_numbers(self):
+        self.number_idle.stop()
+        self.number_fade.stop()
+        self.set_number_alpha(1.0)
+        if self.quadrant_labels_enabled and self.quadrant_label_display == 'timed' and not self.closing:
+            self.number_idle.start(self.quadrant_label_timeout_ms)
+
+    def fade_numbers(self):
+        self.number_fade.setStartValue(self.number_alpha)
+        self.number_fade.setEndValue(0.0)
+        self.number_fade.start()
 
     def apply_view_preferences(self, value):
         theme_changed = self.theme != value['theme']
@@ -532,7 +566,9 @@ class Wall(QMainWindow):
         for key in ('audio_border_enabled', 'audio_border_color', 'overlay_enabled',
                     'overlay_on_shortcuts', 'overlay_timeout_ms', 'three_pane_layout', 'three_pane_primary',
                     'overlay_opacity_percent', 'button_text_size', 'theme', 'browser_max_height',
-                    'quadrant_labels_enabled', 'quadrant_label_size', 'quadrant_label_corner'):
+                    'quadrant_labels_enabled', 'quadrant_label_size', 'quadrant_label_corner',
+                    'quadrant_label_offset_x', 'quadrant_label_offset_y', 'quadrant_label_opacity_percent',
+                    'quadrant_label_display', 'quadrant_label_timeout_ms'):
             setattr(self, key, value[key])
         if theme_changed:
             self.setStyleSheet(stylesheet(self.theme))
@@ -808,6 +844,9 @@ class Wall(QMainWindow):
             return
         self.position_number_badges()
         point = QCursor.pos()
+        if (point != self.last_pointer and self.frameGeometry().contains(point) and
+                QApplication.activeWindow() in self.owned_windows()):
+            self.reveal_numbers()
         if self.shortcuts_dialog and self.shortcuts_dialog.isVisible():
             self.video_input.hide()
             self.hide_controls()
@@ -826,17 +865,19 @@ class Wall(QMainWindow):
         self.last_pointer = point
 
     def position_number_badges(self):
-        visible = (self.quadrant_labels_enabled and not self.immersive and not self.closing and
+        visible = (self.quadrant_labels_enabled and self.number_opacity() > 0 and not self.immersive and not self.closing and
                    not self.isMinimized() and QApplication.activeWindow() in self.owned_windows() and
                    not QApplication.activeModalWidget() and not QApplication.activePopupWidget() and
                    not (self.shortcuts_dialog and self.shortcuts_dialog.isVisible()))
         for pane in self.panes:
             badge = pane.number_badge
+            badge.set_opacity(self.number_opacity())
             if not visible or not pane.isVisible():
                 badge.hide()
                 continue
             rect = label_rect(QRect(pane.video.mapToGlobal(QPoint()), pane.video.size()),
-                              badge.size(), self.quadrant_label_corner)
+                              badge.size(), self.quadrant_label_corner,
+                              self.quadrant_label_offset_x, self.quadrant_label_offset_y)
             if badge.geometry() != rect:
                 badge.setGeometry(rect)
             if not badge.isVisible():
@@ -887,6 +928,7 @@ class Wall(QMainWindow):
             bar.hide()
 
     def show_controls(self, reason='pointer'):
+        self.reveal_numbers()
         if (not self.immersive or self.closing or QApplication.activeModalWidget() or
                 (self.shortcuts_dialog and self.shortcuts_dialog.isVisible())):
             return
@@ -1037,16 +1079,28 @@ class Wall(QMainWindow):
         QApplication.instance().removeEventFilter(self)
         self.pointer_timer.stop()
         self.idle.stop()
+        self.number_idle.stop()
+        self.number_fade.stop()
         if self.recovery:
             self.recovery.after_close()
         self.vlc.release()
         event.accept()
 
+    def restart_for_debug(self):
+        if self.recovery:
+            self.recovery.checkpoint(force=True)
+            if self.recovery.save_error:
+                QMessageBox.warning(self, 'Restart cancelled', 'The session could not be saved. Check free space and permissions.')
+                return
+        self.restart_requested = True
+        self.close()
+
 
 def main():
     os.environ.setdefault('RESOURCE_NAME', APP_ID)
-    restore_after_update = '--restore-after-update' in sys.argv[1:]
-    arguments = [a for a in sys.argv[1:] if a != '--restore-after-update']
+    restore_flags = ('--restore-after-update', '--restore-after-restart')
+    restore_after_update = any(flag in sys.argv[1:] for flag in restore_flags)
+    arguments = [a for a in sys.argv[1:] if a not in restore_flags]
     app = QApplication([sys.argv[0], '-name', APP_ID, *arguments])
     configure_application(app)
     try:
@@ -1058,6 +1112,9 @@ def main():
         QMessageBox.critical(None, 'VLC required', 'Install VLC first: sudo apt install vlc libvlc5')
         return 1
     wall = Wall(instance)
+    from .debug_ui import DebugController
+    debug = DebugController(wall)
+    debug.startup()
     wall.show()
     from .recovery import SessionRecovery
     recovery = SessionRecovery(wall)
@@ -1069,7 +1126,18 @@ def main():
         preferences.start()
         recovery.start(ask=(lambda previous: True) if restore_after_update else None)
     QTimer.singleShot(0, startup)
-    return app.exec()
+    code = app.exec()
+    debug.stop()
+    if wall.restart_requested and not recovery.save_error:
+        from .debug_capture import module_command
+        import subprocess
+        try:
+            subprocess.Popen(module_command('game_stream.app', '--restore-after-restart'),
+                             stdin=subprocess.DEVNULL, start_new_session=True)
+        except OSError:
+            QMessageBox.warning(None, 'Restart unavailable',
+                                'Your session is saved. Open Game Stream again to begin startup diagnostics.')
+    return code
 
 
 if __name__ == '__main__':

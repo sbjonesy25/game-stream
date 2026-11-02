@@ -8,11 +8,11 @@ The normal viewing window does not embed the source website.
 
 ## Shareable Ubuntu installer
 
-Download **[game-stream_0.2.5_amd64.deb](releases/game-stream_0.2.5_amd64.deb)**
+Download **[game-stream_0.2.6_amd64.deb](releases/game-stream_0.2.6_amd64.deb)**
 from `releases/` and install with:
 
 ```bash
-sudo apt install ./game-stream_0.2.5_amd64.deb
+sudo apt install ./game-stream_0.2.6_amd64.deb
 ```
 
 This is the Ubuntu/Linux installer; Android APK files do not run on Ubuntu.
@@ -45,7 +45,7 @@ download still require a host test.
 
 ### Update an installed application
 
-Install the current v0.2.5 package to get these controls. After that, use **Preferences → Updates → Save & check for updates…**. When a newer version is available, choose Yes to download it. Playback
+Install the current v0.2.6 package to get these controls. After that, use **Preferences → Updates → Save & check for updates…**. When a newer version is available, choose Yes to download it. Playback
 continues during the download; you can cancel without closing the app. The app
 checks the size, SHA256 checksum and Debian package name/version/architecture,
 saves the session, then closes all its source browsers. A detached helper waits
@@ -288,13 +288,22 @@ aspect ratio, so individual panes can still have letterboxing.
   Controls wrap to fit narrow panes at larger text sizes.
   Quadrant numbers have independent **10–64 px** text size (default **20 px**),
   a choice of **top left / top right / bottom left / bottom right**, and a visibility
-  checkbox. They default to top left and remain visible when controls fade,
+  checkbox. **Preferences → Quadrant numbers** also provides horizontal and vertical
+  insets (**0–500 px**, default **8 px**, clamped inside the video), opacity
+  (**0–100%**) and **Always on** or **Fade after activity**. Timed labels fade over
+  250 ms after the configured **250–30000 ms** idle delay (default **2200 ms**).
+  Mouse movement over the active app, audio selection and layout/fullscreen changes
+  reveal them again. Number timing is independent of the fullscreen control HUD.
+  They default to top left, always on, and remain visible when controls fade,
   including single-stream fullscreen and after reordering/zooming. Numbers always
   identify the original quadrant, rather than its current screen position.
   Labels paint only text, without copying video frames or starting new browser
   processes. Windowed labels reuse four input-transparent native badges and hide
   when the app is inactive, minimized or showing a modal/help popup. Fullscreen video geometry
   and 2-pixel gaps stay unchanged. Desktop compositing supplies the transparency.
+- **Diagnostics**: opt-in startup resource capture, restart prompt, open the capture
+  folder, start a fresh capture without restarting, and clear saved captures.
+  Disabling recording stops the sampler; existing reports remain until cleared.
 - **Updates**: **Save & check for updates…** saves your edits, closes Preferences,
   checks the repository, then offers installation if a newer package exists.
 
@@ -484,7 +493,52 @@ work. Higher qualities, source-page ads/scripts, native GPU buffers and other
 applications can add substantial memory; these fixes do not promise a 16 GB
 system-wide cap. Browser/GPU/native VLC behavior must be checked on the host.
 
-#### What to send for a continuing memory problem
+#### Automatic debug captures (installed app or source)
+
+1. Open **Preferences → Diagnostics**, enable **Record resource diagnostics from
+   startup**, and **Save**. Accept **Restart** to save/restore your current session
+   and record before streams reconnect. Source browsers may need Play again.
+   Choose No to start recording on the next launch. Failed session saves cancel
+   the automatic restart.
+2. Use **Open debug folder** before reproducing the issue. By default this opens
+   `~/.local/state/game-stream/debug/` (or `$XDG_STATE_HOME/game-stream/debug/`).
+   Every launch creates a new UTC timestamped folder; old samples are never mixed
+   into a new session. **Start fresh capture now** starts a new folder immediately
+   without interrupting streams; it captures the current state rather than startup.
+3. Run the usual streams through the memory rise. If possible, stop all panes and
+   leave the app open another five minutes. Close the app, then compress the
+   corresponding timestamped folder into a ZIP and attach it here. If the app
+   crashes or must be force-closed, the separate sampler ends after detecting its
+   exit, normally within 15 seconds. Completed JSONL lines remain usable.
+4. Mention when you loaded/stopped streams, when the interface stalled, how many
+   streams were running, and whether Brave was also playing copies.
+
+Each folder contains `metadata.json`, `startup.json`, `memory.jsonl` (plus rotated
+`memory.1.jsonl` through `memory.3.jsonl` when needed), `heartbeat.json`, and
+`status.json` when recording ends. The independent sampler writes every 15 seconds;
+Qt writes a small heartbeat every five seconds. An increasing heartbeat age shows
+when the interface stops servicing events. Reports include browser/app/VLC/driver
+process groups, memory/swap, CPU, threads, descriptors and system memory pressure;
+the sampler itself is identified separately. The first snapshot is retained even
+when later logs rotate. No stream URLs, cookies, browser pages, command lines,
+environment dumps, session files or memory dumps are collected. Files are private
+(0600), capture directories 0700. The sampler reads Linux `/proc`; inaccessible
+counters are marked missing, so totals may be incomplete. GPU VRAM is not sampled.
+
+Logs rotate at roughly 8 MiB, keeping four files per capture (about 32 MiB plus
+small metadata). At launch/fresh capture, the newest five captures are retained;
+older captures still recording in another app instance are preserved. Captures
+use constant sampler memory rather than retaining an ever-growing sample list.
+**Clear all debug captures…** deletes only marked, inactive Game Stream diagnostic
+folders, preserving settings, links, browser caches, symlinks and unknown folders.
+If recording is active, it stops the sampler, clears saved captures, then starts a
+fresh folder. Disabling debug mode stops recording but preserves reports. Normal
+uninstall keeps them; `--purge-user-data` removes marked, inactive captures.
+
+This adds evidence collection; the remaining live-stream memory growth still
+needs a capture from your host to identify its source.
+
+#### Manual monitor (no application restart needed)
 
 Start with **one file: `game-stream-memory.json`**, generated by the current
 repository's monitor. Schema 2 includes per-process PSS/RSS/private/swap memory,
@@ -607,7 +661,7 @@ Close Game Stream, then from this checkout run:
 git pull
 ./scripts/uninstall-current-setup.sh --dry-run
 ./scripts/uninstall-current-setup.sh
-sudo apt install ./releases/game-stream_0.2.5_amd64.deb
+sudo apt install ./releases/game-stream_0.2.6_amd64.deb
 ```
 
 This removes old launcher/icon registration and only an editable console package
@@ -618,7 +672,7 @@ preferences too. Custom/symlinked environments and unrelated package installs
 are left alone. Launch the installed app from Applications afterward.
 
 The installer already provides **`game-stream-uninstall`**. A separate
-**[`game-stream-uninstaller_0.2.5.tar.gz`](releases/game-stream-uninstaller_0.2.5.tar.gz)**
+**[`game-stream-uninstaller_0.2.6.tar.gz`](releases/game-stream-uninstaller_0.2.6.tar.gz)**
 bundle and **[`uninstall-game-stream.sh`](releases/uninstall-game-stream.sh)**
 are also included in `releases/`; they work without a checkout or Qt/Python app
 runtime. Run `bash uninstall-game-stream.sh` as your normal desktop user. The
@@ -645,11 +699,15 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `GAME_STREAM_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **80 tests passed on Python 3.12 and 3.14** with
+Current development validation: **90 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
 Stop/reload cleanup, fullscreen 2-pixel geometry, and fading/revealing controls.
+New checks cover label insets, composite opacity, independent idle fading,
+private startup captures in a real separate process, log rotation, PID reuse,
+retention/clear/purge ownership and symlink safety, heartbeat privacy and restart
+preferences/session-save failure handling.
 UI tests also cover number/keypad shortcuts, URL editing protection, remembered
 mute state, zoom/audio round trips, fullscreen double-click input, and two-pane
 hover controls that stay within their pane and never appear simultaneously.

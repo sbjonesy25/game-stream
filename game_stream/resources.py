@@ -23,6 +23,8 @@ def _counters(path):
 def _role(pid, root_pid, directory):
     if pid == root_pid:
         return 'app_vlc'
+    if pid == os.getpid():
+        return 'diagnostic_monitor'
     try:
         name = (directory / 'comm').read_text().strip().lower()
     except OSError:
