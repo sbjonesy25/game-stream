@@ -1,10 +1,16 @@
 {
   "three_pane_layout": "focus",
   "three_pane_primary": 1,
+  "solo_audio": true,
+  "show_browser": true,
+  "browser_max_height": 720,
+  "theme": "default",
   "double_tap_ms": 350,
   "audio_border_enabled": true,
   "audio_border_color": "#00ff00",
   "overlay_enabled": true,
   "overlay_on_shortcuts": true,
-  "overlay_timeout_ms": 2200
+  "overlay_timeout_ms": 2200,
+  "overlay_opacity_percent": 85,
+  "button_text_size": 12
 }

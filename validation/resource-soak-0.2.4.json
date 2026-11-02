@@ -1,0 +1,1973 @@
+{
+  "schema": 1,
+  "version": "0.2.4",
+  "recorded_at": "2026-11-02T00:27:38.781990+00:00",
+  "fixture": "Four real Chromium/Hls.js 1.6.16 synthetic 720p15 players, four FFmpeg readers, loopback only. Hls.js worker/progressive loading disabled to emit complete TS fragments.",
+  "limitations": [
+    "Not the live source website, native VLC, desktop GPU playback, or a 30-minute 16 GB host run.",
+    "Other synthetic runs/tests ran concurrently; PSS apportions shared libraries between processes.",
+    "Cloud has no configured swap, so this does not test actual swapping behavior.",
+    "Same buffer/relay/quality/driver-heap limits as release; passive discovery scan/poll frequency was further reduced afterward and smoke-tested separately."
+  ],
+  "duration_seconds": 604,
+  "warmup_seconds": 300,
+  "warm_pss_mib": {
+    "min": 2673.8,
+    "max": 2735.8,
+    "final": 2733.4
+  },
+  "max_media_cache_bytes": 18732320,
+  "final_forwarded_segments": [
+    601,
+    601,
+    601,
+    601
+  ],
+  "final_ffmpeg_readers": 4,
+  "failures": [],
+  "cleanup": {
+    "processes": 1,
+    "pss_mib": 52.7,
+    "swap_mib": 0.0,
+    "by_role_mib": {
+      "python": 52.7
+    }
+  },
+  "samples": [
+    {
+      "seconds": 0,
+      "processes": 1,
+      "pss_mib": 17.5,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "python": 17.5
+      },
+      "relays": 0,
+      "segments": [],
+      "cache_bytes": 0,
+      "states": {},
+      "failures": [],
+      "decoders_running": 0
+    },
+    {
+      "seconds": 15,
+      "processes": 49,
+      "pss_mib": 1784.3,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1133.6,
+        "python": 64.9,
+        "ffmpeg": 200.6,
+        "MainThread": 385.2
+      },
+      "relays": 4,
+      "segments": [
+        12,
+        13,
+        13,
+        13
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 9.01553,
+          "back": 10,
+          "forward": 12,
+          "time": 10.629168
+        },
+        "/stats?id=1": {
+          "buffered": 10.01553,
+          "back": 10,
+          "forward": 12,
+          "time": 11.862826
+        },
+        "/stats?id=2": {
+          "buffered": 10.01553,
+          "back": 10,
+          "forward": 12,
+          "time": 11.976914
+        },
+        "/stats?id=0": {
+          "buffered": 10.01553,
+          "back": 10,
+          "forward": 12,
+          "time": 12.052642
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 30,
+      "processes": 49,
+      "pss_mib": 1841.9,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1181.3,
+        "python": 66.6,
+        "ffmpeg": 203.2,
+        "MainThread": 390.8
+      },
+      "relays": 4,
+      "segments": [
+        27,
+        28,
+        28,
+        28
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.068209999999999,
+          "back": 10,
+          "forward": 12,
+          "time": 25.629178
+        },
+        "/stats?id=1": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 26.862856
+        },
+        "/stats?id=2": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 26.976889
+        },
+        "/stats?id=0": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 27.05294
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 45,
+      "processes": 49,
+      "pss_mib": 1831.9,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1173.7,
+        "python": 67.7,
+        "ffmpeg": 207.5,
+        "MainThread": 382.9
+      },
+      "relays": 4,
+      "segments": [
+        42,
+        43,
+        43,
+        43
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.068210999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 40.629173
+        },
+        "/stats?id=1": {
+          "buffered": 12.068210999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 41.862847
+        },
+        "/stats?id=2": {
+          "buffered": 12.068210999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 41.977018
+        },
+        "/stats?id=0": {
+          "buffered": 12.068210999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 42.052981
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 60,
+      "processes": 49,
+      "pss_mib": 1978.7,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1315.7,
+        "python": 70.0,
+        "ffmpeg": 207.5,
+        "MainThread": 385.3
+      },
+      "relays": 4,
+      "segments": [
+        57,
+        58,
+        58,
+        58
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.068199,
+          "back": 10,
+          "forward": 12,
+          "time": 55.628969
+        },
+        "/stats?id=1": {
+          "buffered": 12.068199,
+          "back": 10,
+          "forward": 12,
+          "time": 56.862849
+        },
+        "/stats?id=2": {
+          "buffered": 12.068199,
+          "back": 10,
+          "forward": 12,
+          "time": 56.976856
+        },
+        "/stats?id=0": {
+          "buffered": 12.068199,
+          "back": 10,
+          "forward": 12,
+          "time": 57.053044
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 75,
+      "processes": 49,
+      "pss_mib": 2070.4,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1412.1,
+        "python": 68.6,
+        "ffmpeg": 207.8,
+        "MainThread": 382.0
+      },
+      "relays": 4,
+      "segments": [
+        72,
+        73,
+        73,
+        73
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.034110000000005,
+          "back": 10,
+          "forward": 12,
+          "time": 70.628717
+        },
+        "/stats?id=1": {
+          "buffered": 12.06821,
+          "back": 10,
+          "forward": 12,
+          "time": 71.862833
+        },
+        "/stats?id=2": {
+          "buffered": 12.06821,
+          "back": 10,
+          "forward": 12,
+          "time": 71.976641
+        },
+        "/stats?id=0": {
+          "buffered": 12.06821,
+          "back": 10,
+          "forward": 12,
+          "time": 72.052952
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 90,
+      "processes": 49,
+      "pss_mib": 2128.4,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1466.1,
+        "python": 68.4,
+        "ffmpeg": 208.0,
+        "MainThread": 385.9
+      },
+      "relays": 4,
+      "segments": [
+        87,
+        88,
+        88,
+        88
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 85.629137
+        },
+        "/stats?id=1": {
+          "buffered": 12.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 86.862839
+        },
+        "/stats?id=2": {
+          "buffered": 12.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 86.976893
+        },
+        "/stats?id=0": {
+          "buffered": 12.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 87.052799
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 105,
+      "processes": 49,
+      "pss_mib": 2147.0,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1474.0,
+        "python": 69.6,
+        "ffmpeg": 209.6,
+        "MainThread": 393.7
+      },
+      "relays": 4,
+      "segments": [
+        103,
+        103,
+        103,
+        103
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 100.629138
+        },
+        "/stats?id=1": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 101.862815
+        },
+        "/stats?id=2": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 101.976771
+        },
+        "/stats?id=0": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 102.05269
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 121,
+      "processes": 49,
+      "pss_mib": 2242.1,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1579.1,
+        "python": 69.8,
+        "ffmpeg": 209.7,
+        "MainThread": 383.5
+      },
+      "relays": 4,
+      "segments": [
+        118,
+        118,
+        118,
+        118
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.034099000000012,
+          "back": 10,
+          "forward": 12,
+          "time": 115.60876
+        },
+        "/stats?id=1": {
+          "buffered": 12.034099000000012,
+          "back": 10,
+          "forward": 12,
+          "time": 116.862847
+        },
+        "/stats?id=2": {
+          "buffered": 12.034099000000012,
+          "back": 10,
+          "forward": 12,
+          "time": 116.976876
+        },
+        "/stats?id=0": {
+          "buffered": 12.034099000000012,
+          "back": 10,
+          "forward": 12,
+          "time": 117.032931
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 136,
+      "processes": 49,
+      "pss_mib": 2278.3,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1600.3,
+        "python": 73.7,
+        "ffmpeg": 209.7,
+        "MainThread": 394.5
+      },
+      "relays": 4,
+      "segments": [
+        133,
+        133,
+        133,
+        133
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068210000000008,
+          "back": 10,
+          "forward": 12,
+          "time": 130.608373
+        },
+        "/stats?id=1": {
+          "buffered": 12.034099000000012,
+          "back": 10,
+          "forward": 12,
+          "time": 131.822847
+        },
+        "/stats?id=2": {
+          "buffered": 12.034099000000012,
+          "back": 10,
+          "forward": 12,
+          "time": 131.953946
+        },
+        "/stats?id=0": {
+          "buffered": 12.034099000000012,
+          "back": 10,
+          "forward": 12,
+          "time": 132.033069
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 151,
+      "processes": 49,
+      "pss_mib": 2327.0,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1649.1,
+        "python": 74.7,
+        "ffmpeg": 209.8,
+        "MainThread": 393.4
+      },
+      "relays": 4,
+      "segments": [
+        148,
+        149,
+        149,
+        149
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068209999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 145.608777
+        },
+        "/stats?id=1": {
+          "buffered": 12.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 146.822849
+        },
+        "/stats?id=2": {
+          "buffered": 12.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 146.956882
+        },
+        "/stats?id=0": {
+          "buffered": 12.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 147.012838
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 166,
+      "processes": 49,
+      "pss_mib": 2380.1,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1714.3,
+        "python": 68.1,
+        "ffmpeg": 209.8,
+        "MainThread": 387.9
+      },
+      "relays": 4,
+      "segments": [
+        163,
+        164,
+        164,
+        164
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 160.606258
+        },
+        "/stats?id=1": {
+          "buffered": 12.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 161.82283
+        },
+        "/stats?id=2": {
+          "buffered": 12.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 161.956875
+        },
+        "/stats?id=0": {
+          "buffered": 12.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 162.012739
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 181,
+      "processes": 49,
+      "pss_mib": 2426.1,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1756.4,
+        "python": 71.7,
+        "ffmpeg": 208.8,
+        "MainThread": 389.3
+      },
+      "relays": 4,
+      "segments": [
+        178,
+        179,
+        179,
+        179
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 175.608631
+        },
+        "/stats?id=1": {
+          "buffered": 12.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 176.822842
+        },
+        "/stats?id=2": {
+          "buffered": 12.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 176.956723
+        },
+        "/stats?id=0": {
+          "buffered": 12.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 177.012923
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 196,
+      "processes": 49,
+      "pss_mib": 2482.7,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1804.1,
+        "python": 74.0,
+        "ffmpeg": 209.8,
+        "MainThread": 394.8
+      },
+      "relays": 4,
+      "segments": [
+        193,
+        194,
+        194,
+        194
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 190.609155
+        },
+        "/stats?id=1": {
+          "buffered": 13.068209999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 191.822844
+        },
+        "/stats?id=2": {
+          "buffered": 12.068209999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 191.95689
+        },
+        "/stats?id=0": {
+          "buffered": 12.068209999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 192.012939
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 211,
+      "processes": 49,
+      "pss_mib": 2524.5,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1848.0,
+        "python": 76.1,
+        "ffmpeg": 209.8,
+        "MainThread": 390.5
+      },
+      "relays": 4,
+      "segments": [
+        208,
+        209,
+        209,
+        209
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 205.609154
+        },
+        "/stats?id=1": {
+          "buffered": 13.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 206.822819
+        },
+        "/stats?id=2": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 206.956838
+        },
+        "/stats?id=0": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 207.012871
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 226,
+      "processes": 49,
+      "pss_mib": 2545.7,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1867.7,
+        "python": 76.2,
+        "ffmpeg": 209.8,
+        "MainThread": 392.0
+      },
+      "relays": 4,
+      "segments": [
+        224,
+        224,
+        224,
+        224
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 220.60916
+        },
+        "/stats?id=1": {
+          "buffered": 13.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 221.82282
+        },
+        "/stats?id=2": {
+          "buffered": 13.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 221.9568
+        },
+        "/stats?id=0": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 222.012947
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 242,
+      "processes": 49,
+      "pss_mib": 2604.3,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1929.9,
+        "python": 72.8,
+        "ffmpeg": 209.9,
+        "MainThread": 391.6
+      },
+      "relays": 4,
+      "segments": [
+        239,
+        239,
+        239,
+        239
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 235.609144
+        },
+        "/stats?id=1": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 236.822856
+        },
+        "/stats?id=2": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 236.956871
+        },
+        "/stats?id=0": {
+          "buffered": 12.034098999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 237.012935
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 257,
+      "processes": 49,
+      "pss_mib": 2664.4,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1987.2,
+        "python": 74.1,
+        "ffmpeg": 209.9,
+        "MainThread": 393.1
+      },
+      "relays": 4,
+      "segments": [
+        254,
+        254,
+        254,
+        254
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 12.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 250.609164
+        },
+        "/stats?id=1": {
+          "buffered": 13.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 251.823097
+        },
+        "/stats?id=2": {
+          "buffered": 13.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 251.957006
+        },
+        "/stats?id=0": {
+          "buffered": 13.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 252.012778
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 272,
+      "processes": 49,
+      "pss_mib": 2700.2,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2015.6,
+        "python": 77.1,
+        "ffmpeg": 214.0,
+        "MainThread": 393.5
+      },
+      "relays": 4,
+      "segments": [
+        269,
+        269,
+        269,
+        269
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 265.609405
+        },
+        "/stats?id=1": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 266.822834
+        },
+        "/stats?id=2": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 266.95686
+        },
+        "/stats?id=0": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 267.013055
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 287,
+      "processes": 49,
+      "pss_mib": 2626.3,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1951.9,
+        "python": 75.5,
+        "ffmpeg": 214.0,
+        "MainThread": 384.9
+      },
+      "relays": 4,
+      "segments": [
+        284,
+        284,
+        284,
+        284
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 280.606113
+        },
+        "/stats?id=1": {
+          "buffered": 13.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 281.822829
+        },
+        "/stats?id=2": {
+          "buffered": 13.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 281.95687
+        },
+        "/stats?id=0": {
+          "buffered": 13.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 282.012952
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 302,
+      "processes": 49,
+      "pss_mib": 2679.4,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1994.3,
+        "python": 72.7,
+        "ffmpeg": 214.1,
+        "MainThread": 398.3
+      },
+      "relays": 4,
+      "segments": [
+        299,
+        299,
+        299,
+        299
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 295.609154
+        },
+        "/stats?id=1": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 296.823227
+        },
+        "/stats?id=2": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 296.95689
+        },
+        "/stats?id=0": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 297.013149
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 317,
+      "processes": 49,
+      "pss_mib": 2677.9,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1988.9,
+        "python": 77.0,
+        "ffmpeg": 214.1,
+        "MainThread": 397.9
+      },
+      "relays": 4,
+      "segments": [
+        314,
+        314,
+        315,
+        314
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 310.609158
+        },
+        "/stats?id=1": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 311.822852
+        },
+        "/stats?id=2": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 311.956814
+        },
+        "/stats?id=0": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 312.012914
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 332,
+      "processes": 49,
+      "pss_mib": 2707.0,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2021.8,
+        "python": 77.3,
+        "ffmpeg": 214.1,
+        "MainThread": 393.8
+      },
+      "relays": 4,
+      "segments": [
+        329,
+        330,
+        330,
+        330
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 330.609174
+        },
+        "/stats?id=1": {
+          "buffered": 13.034099000000026,
+          "back": 10,
+          "forward": 12,
+          "time": 326.823507
+        },
+        "/stats?id=2": {
+          "buffered": 13.034099000000026,
+          "back": 10,
+          "forward": 12,
+          "time": 326.95684
+        },
+        "/stats?id=0": {
+          "buffered": 13.034099000000026,
+          "back": 10,
+          "forward": 12,
+          "time": 327.013581
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 347,
+      "processes": 49,
+      "pss_mib": 2685.8,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1997.1,
+        "python": 76.7,
+        "ffmpeg": 214.1,
+        "MainThread": 397.8
+      },
+      "relays": 4,
+      "segments": [
+        344,
+        345,
+        345,
+        345
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 345.60912
+        },
+        "/stats?id=1": {
+          "buffered": 13.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 346.822854
+        },
+        "/stats?id=2": {
+          "buffered": 13.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 341.956811
+        },
+        "/stats?id=0": {
+          "buffered": 13.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 342.012729
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 362,
+      "processes": 49,
+      "pss_mib": 2701.8,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2010.5,
+        "python": 75.7,
+        "ffmpeg": 214.1,
+        "MainThread": 401.5
+      },
+      "relays": 4,
+      "segments": [
+        359,
+        360,
+        360,
+        360
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 360.609165
+        },
+        "/stats?id=1": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 361.822833
+        },
+        "/stats?id=2": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 361.956792
+        },
+        "/stats?id=0": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 362.013081
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 377,
+      "processes": 49,
+      "pss_mib": 2701.6,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2004.4,
+        "python": 81.6,
+        "ffmpeg": 214.1,
+        "MainThread": 401.4
+      },
+      "relays": 4,
+      "segments": [
+        374,
+        375,
+        375,
+        375
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 375.609154
+        },
+        "/stats?id=1": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 376.822837
+        },
+        "/stats?id=2": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 376.956826
+        },
+        "/stats?id=0": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 377.012835
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 392,
+      "processes": 49,
+      "pss_mib": 2704.3,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2017.1,
+        "python": 80.3,
+        "ffmpeg": 214.1,
+        "MainThread": 392.7
+      },
+      "relays": 4,
+      "segments": [
+        389,
+        390,
+        390,
+        390
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.034099000000026,
+          "back": 10,
+          "forward": 12,
+          "time": 390.609176
+        },
+        "/stats?id=1": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 391.822688
+        },
+        "/stats?id=2": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 391.956876
+        },
+        "/stats?id=0": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 392.012466
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 407,
+      "processes": 49,
+      "pss_mib": 2681.2,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1993.8,
+        "python": 78.5,
+        "ffmpeg": 214.0,
+        "MainThread": 394.8
+      },
+      "relays": 4,
+      "segments": [
+        404,
+        405,
+        405,
+        405
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.034099000000026,
+          "back": 10,
+          "forward": 12,
+          "time": 405.5674
+        },
+        "/stats?id=1": {
+          "buffered": 13.16743200000002,
+          "back": 10,
+          "forward": 12,
+          "time": 406.867045
+        },
+        "/stats?id=2": {
+          "buffered": 12.034099000000026,
+          "back": 10,
+          "forward": 12,
+          "time": 406.902546
+        },
+        "/stats?id=0": {
+          "buffered": 12.434099000000003,
+          "back": 10,
+          "forward": 12,
+          "time": 407.067106
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 423,
+      "processes": 49,
+      "pss_mib": 2673.9,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1979.6,
+        "python": 81.4,
+        "ffmpeg": 211.2,
+        "MainThread": 401.6
+      },
+      "relays": 4,
+      "segments": [
+        420,
+        420,
+        420,
+        420
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.034110999999996,
+          "back": 10,
+          "forward": 12,
+          "time": 420.529736
+        },
+        "/stats?id=1": {
+          "buffered": 14.034110999999996,
+          "back": 10,
+          "forward": 12,
+          "time": 421.722815
+        },
+        "/stats?id=2": {
+          "buffered": 13.034110999999996,
+          "back": 10,
+          "forward": 12,
+          "time": 421.876974
+        },
+        "/stats?id=0": {
+          "buffered": 13.034110999999996,
+          "back": 10,
+          "forward": 12,
+          "time": 421.953274
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 438,
+      "processes": 49,
+      "pss_mib": 2693.7,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2007.0,
+        "python": 71.8,
+        "ffmpeg": 214.1,
+        "MainThread": 400.8
+      },
+      "relays": 4,
+      "segments": [
+        435,
+        435,
+        435,
+        435
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 435.529101
+        },
+        "/stats?id=1": {
+          "buffered": 14.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 436.72282
+        },
+        "/stats?id=2": {
+          "buffered": 14.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 436.876874
+        },
+        "/stats?id=0": {
+          "buffered": 13.034109999999998,
+          "back": 10,
+          "forward": 12,
+          "time": 436.952923
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 453,
+      "processes": 49,
+      "pss_mib": 2673.8,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 1981.4,
+        "python": 77.2,
+        "ffmpeg": 214.1,
+        "MainThread": 401.0
+      },
+      "relays": 4,
+      "segments": [
+        450,
+        450,
+        450,
+        450
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 450.529162
+        },
+        "/stats?id=1": {
+          "buffered": 14.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 451.72283
+        },
+        "/stats?id=2": {
+          "buffered": 14.068198999999993,
+          "back": 10,
+          "forward": 12,
+          "time": 451.876858
+        },
+        "/stats?id=0": {
+          "buffered": 13.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 451.952964
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 468,
+      "processes": 49,
+      "pss_mib": 2698.2,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2004.8,
+        "python": 78.9,
+        "ffmpeg": 214.1,
+        "MainThread": 400.4
+      },
+      "relays": 4,
+      "segments": [
+        465,
+        465,
+        466,
+        465
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 465.52934
+        },
+        "/stats?id=1": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 466.722841
+        },
+        "/stats?id=2": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 466.876852
+        },
+        "/stats?id=0": {
+          "buffered": 13.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 466.952926
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 483,
+      "processes": 49,
+      "pss_mib": 2714.6,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2011.0,
+        "python": 78.2,
+        "ffmpeg": 214.1,
+        "MainThread": 411.2
+      },
+      "relays": 4,
+      "segments": [
+        480,
+        481,
+        481,
+        481
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 480.529038
+        },
+        "/stats?id=1": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 481.722834
+        },
+        "/stats?id=2": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 481.87497
+        },
+        "/stats?id=0": {
+          "buffered": 13.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 481.912974
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 498,
+      "processes": 49,
+      "pss_mib": 2715.2,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2011.7,
+        "python": 81.6,
+        "ffmpeg": 214.1,
+        "MainThread": 407.7
+      },
+      "relays": 4,
+      "segments": [
+        495,
+        496,
+        496,
+        496
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 495.529131
+        },
+        "/stats?id=1": {
+          "buffered": 14.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 496.722833
+        },
+        "/stats?id=2": {
+          "buffered": 14.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 496.875404
+        },
+        "/stats?id=0": {
+          "buffered": 14.068209999999965,
+          "back": 10,
+          "forward": 12,
+          "time": 496.913043
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 513,
+      "processes": 49,
+      "pss_mib": 2716.3,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2015.5,
+        "python": 78.7,
+        "ffmpeg": 214.1,
+        "MainThread": 408.1
+      },
+      "relays": 4,
+      "segments": [
+        510,
+        511,
+        511,
+        511
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 510.527594
+        },
+        "/stats?id=1": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 511.72284
+        },
+        "/stats?id=2": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 511.875556
+        },
+        "/stats?id=0": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 511.912951
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 528,
+      "processes": 49,
+      "pss_mib": 2710.8,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2007.0,
+        "python": 77.5,
+        "ffmpeg": 214.1,
+        "MainThread": 412.1
+      },
+      "relays": 4,
+      "segments": [
+        525,
+        526,
+        526,
+        526
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 525.528522
+        },
+        "/stats?id=1": {
+          "buffered": 14.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 526.722833
+        },
+        "/stats?id=2": {
+          "buffered": 14.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 526.875615
+        },
+        "/stats?id=0": {
+          "buffered": 14.03409899999997,
+          "back": 10,
+          "forward": 12,
+          "time": 526.912976
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 543,
+      "processes": 49,
+      "pss_mib": 2735.8,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2036.8,
+        "python": 82.4,
+        "ffmpeg": 214.2,
+        "MainThread": 402.5
+      },
+      "relays": 4,
+      "segments": [
+        541,
+        541,
+        541,
+        541
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.034110000000055,
+          "back": 10,
+          "forward": 12,
+          "time": 540.529152
+        },
+        "/stats?id=1": {
+          "buffered": 14.034110000000055,
+          "back": 10,
+          "forward": 12,
+          "time": 541.722821
+        },
+        "/stats?id=2": {
+          "buffered": 14.034110000000055,
+          "back": 10,
+          "forward": 12,
+          "time": 541.876856
+        },
+        "/stats?id=0": {
+          "buffered": 14.034110000000055,
+          "back": 10,
+          "forward": 12,
+          "time": 541.912886
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 559,
+      "processes": 49,
+      "pss_mib": 2722.1,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2014.3,
+        "python": 82.4,
+        "ffmpeg": 214.2,
+        "MainThread": 411.3
+      },
+      "relays": 4,
+      "segments": [
+        556,
+        556,
+        556,
+        556
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.06819900000005,
+          "back": 10,
+          "forward": 12,
+          "time": 555.529139
+        },
+        "/stats?id=1": {
+          "buffered": 14.034099000000083,
+          "back": 10,
+          "forward": 12,
+          "time": 556.72282
+        },
+        "/stats?id=2": {
+          "buffered": 14.034099000000083,
+          "back": 10,
+          "forward": 12,
+          "time": 556.876179
+        },
+        "/stats?id=0": {
+          "buffered": 14.034099000000083,
+          "back": 10,
+          "forward": 12,
+          "time": 556.912959
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 574,
+      "processes": 49,
+      "pss_mib": 2719.4,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2013.4,
+        "python": 80.9,
+        "ffmpeg": 215.5,
+        "MainThread": 409.6
+      },
+      "relays": 4,
+      "segments": [
+        571,
+        571,
+        571,
+        571
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 14.068209999999908,
+          "back": 10,
+          "forward": 12,
+          "time": 570.529077
+        },
+        "/stats?id=1": {
+          "buffered": 14.068209999999908,
+          "back": 10,
+          "forward": 12,
+          "time": 571.722838
+        },
+        "/stats?id=2": {
+          "buffered": 14.068209999999908,
+          "back": 10,
+          "forward": 12,
+          "time": 571.876247
+        },
+        "/stats?id=0": {
+          "buffered": 14.068209999999908,
+          "back": 10,
+          "forward": 12,
+          "time": 571.912774
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 589,
+      "processes": 49,
+      "pss_mib": 2716.5,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2009.4,
+        "python": 82.0,
+        "ffmpeg": 215.5,
+        "MainThread": 409.6
+      },
+      "relays": 4,
+      "segments": [
+        586,
+        586,
+        586,
+        586
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 15.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 585.528868
+        },
+        "/stats?id=1": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 586.722827
+        },
+        "/stats?id=2": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 586.876789
+        },
+        "/stats?id=0": {
+          "buffered": 14.068210000000022,
+          "back": 10,
+          "forward": 12,
+          "time": 586.912926
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    },
+    {
+      "seconds": 604,
+      "processes": 49,
+      "pss_mib": 2733.4,
+      "swap_mib": 0.0,
+      "by_role_mib": {
+        "chromium": 2033.0,
+        "python": 81.1,
+        "ffmpeg": 215.5,
+        "MainThread": 403.8
+      },
+      "relays": 4,
+      "segments": [
+        601,
+        601,
+        601,
+        601
+      ],
+      "cache_bytes": 18732320,
+      "states": {
+        "/stats?id=3": {
+          "buffered": 15.06821100000002,
+          "back": 10,
+          "forward": 12,
+          "time": 600.52917
+        },
+        "/stats?id=1": {
+          "buffered": 14.06821100000002,
+          "back": 10,
+          "forward": 12,
+          "time": 601.702825
+        },
+        "/stats?id=2": {
+          "buffered": 14.06821100000002,
+          "back": 10,
+          "forward": 12,
+          "time": 601.837469
+        },
+        "/stats?id=0": {
+          "buffered": 14.06821100000002,
+          "back": 10,
+          "forward": 12,
+          "time": 601.872792
+        }
+      },
+      "failures": [],
+      "decoders_running": 4
+    }
+  ]
+}

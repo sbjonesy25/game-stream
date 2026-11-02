@@ -9,8 +9,8 @@ from time import monotonic
 
 
 class BrowserRelay:
-    MAX_BYTES = 64 * 1024 * 1024
-    MAX_SEGMENTS = 12
+    MAX_BYTES = 48 * 1024 * 1024
+    MAX_SEGMENTS = 8
 
     def __init__(self):
         self.lock = Lock()
@@ -31,24 +31,29 @@ class BrowserRelay:
                 pass
 
             def do_GET(self):
+                error = None
                 with relay.lock:
                     if self.path == relay.prefix + '/live.m3u8':
                         if not relay.segments:
-                            self.send_error(503, 'Waiting for browser media')
-                            return
-                        body = relay.playlist().encode()
+                            error = 503
+                        else:
+                            body = relay.playlist().encode()
                         mime = 'application/vnd.apple.mpegurl'
                     elif self.path.startswith(relay.prefix + '/'):
                         name = self.path[len(relay.prefix) + 1:]
                         key = name[:-3] if name.endswith('.ts') else ''
                         entry = relay.segments.get(int(key)) if key.isdecimal() else None
                         if entry is None:
-                            self.send_error(404)
-                            return
-                        body, mime = entry['bytes'], 'video/mp2t'
+                            error = 404
+                        else:
+                            body, mime = entry['bytes'], 'video/mp2t'
                     else:
-                        self.send_error(404)
-                        return
+                        error = 404
+                # Never write to a client while holding the fragment cache lock.
+                self.connection.settimeout(5)
+                if error:
+                    self.send_error(error)
+                    return
                 try:
                     self.send_response(200)
                     self.send_header('Content-Type', mime)
@@ -74,6 +79,9 @@ class BrowserRelay:
         """Validate page messages; never store URLs, cookies, or unbounded media."""
         if self.closed.is_set():
             return False
+        with self.lock:
+            if self.selected is not None and self.selected != player:
+                return False  # Avoid decoding/copying fragments from other players.
         try:
             sn, cc = fragment['sequence'], fragment['cc']
             duration = float(fragment['duration'])

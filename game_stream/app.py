@@ -6,8 +6,8 @@ from time import monotonic
 # libVLC embeds into an X11 window; XWayland supports this on Ubuntu Wayland.
 os.environ.setdefault('QT_QPA_PLATFORM', 'xcb')
 from PySide6.QtCore import Qt, QThread, Signal, QTimer, QPropertyAnimation, QEvent, QPoint, QRect, QByteArray
-from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon, QPen, QActionGroup
-from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
+from PySide6.QtGui import QKeySequence, QShortcut, QCursor, QPainter, QColor, QIcon, QPen, QActionGroup, QAction
+from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
     QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
     QPushButton, QSlider, QVBoxLayout, QWidget, QTextEdit, QPlainTextEdit, QAbstractSpinBox, QMenu)
 
@@ -16,6 +16,9 @@ from .bridge import BrowserRelay
 from .resolver import resolve, validate_url
 from .branding import APP_ID, DISPLAY_NAME, ICON_PATH, configure_application
 from .config import DEFAULTS
+from .flow_layout import FlowLayout
+from .themes import PALETTES, stylesheet
+from .shortcuts import ShortcutDialog
 
 
 class FloatingBar(QFrame):
@@ -24,6 +27,7 @@ class FloatingBar(QFrame):
         super().__init__(wall, Qt.WindowType.Tool | Qt.WindowType.FramelessWindowHint |
                          Qt.WindowType.BypassWindowManagerHint)
         self.setObjectName('hoverBar')
+        self.wall = wall
         self.setAttribute(Qt.WidgetAttribute.WA_ShowWithoutActivating)
         self.box = QVBoxLayout(self)
         self.box.setContentsMargins(4, 4, 4, 4)
@@ -35,7 +39,7 @@ class FloatingBar(QFrame):
 
     def reveal(self):
         self.animation.stop()
-        self.setWindowOpacity(1)
+        self.setWindowOpacity(self.wall.overlay_opacity_percent / 100)
         self.show()
         self.raise_()
 
@@ -95,18 +99,20 @@ class ResolverWorker(QThread):
     failed = Signal(str, int)
     status = Signal(str, int)
 
-    def __init__(self, url, cookies, visible, parent, auto_play=False, generation=0):
+    def __init__(self, url, cookies, visible, parent, auto_play=False, generation=0, max_height=720):
         super().__init__(parent)
         self.args = (url, cookies, visible)
         self.cancel = Event()
         self.auto_play = auto_play
         self.generation = generation
+        self.max_height = max_height
 
     def run(self):
         try:
             resolve(*self.args, cancel=self.cancel,
                     on_ready=lambda source: self.resolved.emit(source, self.generation),
-                    on_status=lambda message: self.status.emit(message, self.generation), auto_play=self.auto_play)
+                    on_status=lambda message: self.status.emit(message, self.generation), auto_play=self.auto_play,
+                    max_height=self.max_height)
         except Exception as exc:
             if self.cancel.is_set():
                 return
@@ -171,7 +177,7 @@ class Pane(QFrame):
         self.paste_button.clicked.connect(self.paste_and_load)
         entry.addWidget(self.paste_button)
         chrome_layout.addWidget(self.entry)
-        controls = QHBoxLayout()
+        controls = FlowLayout()
         controls.setSpacing(4)
         pause = QPushButton('Pause')
         pause.setToolTip('Pause / resume this stream')
@@ -201,7 +207,7 @@ class Pane(QFrame):
         self.status = QLabel('Ready — paste a link above')
         self.status.setMinimumWidth(0)
         self.status.setWordWrap(True)
-        controls.addWidget(self.status, 1)
+        controls.addWidget(self.status)
         chrome_layout.addLayout(controls)
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.check_state)
@@ -217,7 +223,7 @@ class Pane(QFrame):
         # geometry. Windowed mode leaves a one-pixel frame around the pane.
         margin = 1 if active and not self.wall.immersive else 0
         self.layout.setContentsMargins(margin, margin, margin, margin)
-        color = self.wall.audio_border_color if active and not self.wall.immersive else '#151b29'
+        color = self.wall.audio_border_color if active and not self.wall.immersive else PALETTES[self.wall.theme]['background']
         self.setStyleSheet(f'QFrame#pane {{ background-color: {color}; border: 0; }}')
 
     def sync_audio(self):
@@ -289,7 +295,8 @@ class Pane(QFrame):
         self.status.setText('Open the source player and press Play. Waiting for video…')
         self.load_button.setEnabled(False)
         self.worker = ResolverWorker(url, self.wall.cookie_path,
-                                     self.wall.browser.isChecked(), self, auto_play=auto_play, generation=generation)
+                                     self.wall.browser.isChecked(), self, auto_play=auto_play, generation=generation,
+                                     max_height=self.wall.browser_max_height)
         # Bound QWidget slots keep all widget/VLC operations on the GUI thread.
         self.worker.resolved.connect(self.source_ready)
         self.worker.failed.connect(self.source_failed)
@@ -396,6 +403,10 @@ class Wall(QMainWindow):
         self.vlc = instance
         self.recovery = None
         self.preferences = None
+        self.shortcuts_dialog = None
+        self.theme = DEFAULTS['theme']
+        self.browser_max_height = DEFAULTS['browser_max_height']
+        self.setStyleSheet(stylesheet(self.theme))
         self.updater = None
         self.double_tap_ms = 350
         self.audio_border_enabled = DEFAULTS['audio_border_enabled']
@@ -403,6 +414,8 @@ class Wall(QMainWindow):
         self.overlay_enabled = DEFAULTS['overlay_enabled']
         self.overlay_on_shortcuts = DEFAULTS['overlay_on_shortcuts']
         self.overlay_timeout_ms = DEFAULTS['overlay_timeout_ms']
+        self.overlay_opacity_percent = DEFAULTS['overlay_opacity_percent']
+        self.button_text_size = DEFAULTS['button_text_size']
         self.three_pane_layout = DEFAULTS['three_pane_layout']
         self.three_pane_primary = DEFAULTS['three_pane_primary']
         self._number_tap = None
@@ -426,11 +439,7 @@ class Wall(QMainWindow):
         tools.setContentsMargins(2, 2, 2, 2)
         tools.setSpacing(6)
         tools.addWidget(QLabel('Game Stream'))
-        self.app_button = QPushButton('App ▾')
-        self.app_menu = QMenu(self.app_button)
-        self.update_action = self.app_menu.addAction('Check for Updates…')
-        self.app_button.setMenu(self.app_menu)
-        tools.addWidget(self.app_button)
+        self.update_action = QAction('Check for Updates…', self)
         self.preferences_button = QPushButton('Preferences')
         tools.addWidget(self.preferences_button)
         self.layout_button = QPushButton('Layout ▾')
@@ -461,20 +470,14 @@ class Wall(QMainWindow):
         self.count.setCurrentIndex(3)
         self.count.currentIndexChanged.connect(self.arrange)
         tools.addWidget(self.count)
-        self.solo = QCheckBox('Solo audio')
+        self.solo = QCheckBox('Solo audio', self)
         self.solo.setChecked(True)
         self.solo.toggled.connect(self.enforce_solo)
-        tools.addWidget(self.solo)
-        self.browser = QCheckBox('Show browser')
+        self.solo.hide()
+        self.browser = QCheckBox('Show browser', self)
         self.browser.setChecked(True)
         self.browser.setToolTip('Press Play in the browser. Custom player sessions stay running, muted and minimized.')
-        tools.addWidget(self.browser)
-        self.cookies = QPushButton('Cookies…')
-        self.cookies.clicked.connect(self.select_cookies)
-        tools.addWidget(self.cookies)
-        clear = QPushButton('Clear cookies')
-        clear.clicked.connect(self.clear_cookies)
-        tools.addWidget(clear)
+        self.browser.hide()
         full = QPushButton('Fullscreen · F / F11')
         full.clicked.connect(self.toggle_fullscreen)
         tools.addWidget(full)
@@ -486,6 +489,7 @@ class Wall(QMainWindow):
         self.grid.setSpacing(2)
         self.layout.addLayout(self.grid, 1)
         self.panes = [Pane(n + 1, self) for n in range(4)]
+        self.apply_control_style()
         self.arrange()
         QShortcut(QKeySequence('F11'), self, activated=self.toggle_fullscreen)
         QShortcut(QKeySequence('Escape'), self, activated=self.restore)
@@ -509,11 +513,15 @@ class Wall(QMainWindow):
         self.video_input.update()
 
     def apply_view_preferences(self, value):
+        theme_changed = self.theme != value['theme']
         layout_changed = (self.three_pane_layout != value['three_pane_layout'] or
                           self.three_pane_primary != value['three_pane_primary'])
         for key in ('audio_border_enabled', 'audio_border_color', 'overlay_enabled',
-                    'overlay_on_shortcuts', 'overlay_timeout_ms', 'three_pane_layout', 'three_pane_primary'):
+                    'overlay_on_shortcuts', 'overlay_timeout_ms', 'three_pane_layout', 'three_pane_primary',
+                    'overlay_opacity_percent', 'button_text_size', 'theme', 'browser_max_height'):
             setattr(self, key, value[key])
+        if theme_changed:
+            self.setStyleSheet(stylesheet(self.theme))
         self.idle.setInterval(self.overlay_timeout_ms or 2200)
         if not self.overlay_enabled or self.overlay_timeout_ms == 0:
             self.idle.stop()
@@ -524,11 +532,38 @@ class Wall(QMainWindow):
             self.root.unsetCursor()
             self.video_input.unsetCursor()
         self.refresh_audio_borders()
+        self.apply_control_style()
         if layout_changed:
             self.layout_panes()
 
+    def apply_control_style(self):
+        style = f'QPushButton {{ font-size: {self.button_text_size}px; }}'
+        self.tools.setStyleSheet(style)
+        for pane in self.panes:
+            pane.chrome.setStyleSheet(style)
+        for bar in [self.tools_overlay, *[p.overlay for p in self.panes]]:
+            if bar.isVisible():
+                bar.animation.stop()
+                bar.setWindowOpacity(self.overlay_opacity_percent / 100)
+        if self.immersive:
+            QTimer.singleShot(0, self.align_video_input)
+
     def single_stream_fullscreen(self):
         return self.immersive and (self.expanded is not None or self.count.currentIndex() == 0)
+
+    def toggle_shortcuts(self):
+        if self.shortcuts_dialog is None:
+            self.shortcuts_dialog = ShortcutDialog(self)
+        if self.shortcuts_dialog.isVisible():
+            self.shortcuts_dialog.hide()
+            self.activateWindow()
+            self.setFocus()
+        else:
+            self.hide_controls()
+            self.video_input.hide()
+            self.shortcuts_dialog.show()
+            self.shortcuts_dialog.raise_()
+            self.shortcuts_dialog.activateWindow()
 
     def choose_three_layout(self, mode=None, primary=None):
         self.expanded = None
@@ -564,7 +599,6 @@ class Wall(QMainWindow):
         self.solo.setChecked(snapshot['solo_audio'])
         if snapshot['cookie_file'] and Path(snapshot['cookie_file']).is_file():
             self.cookie_path = snapshot['cookie_file']
-            self.cookies.setText('Cookies selected')
         if snapshot['geometry']:
             self.restoreGeometry(QByteArray.fromBase64(snapshot['geometry'].encode('ascii')))
         if snapshot['fullscreen']:
@@ -596,18 +630,52 @@ class Wall(QMainWindow):
         return super().eventFilter(watched, event)
 
     def owned_windows(self):
-        return [self, self.video_input, self.tools_overlay, *[p.overlay for p in self.panes]]
+        return [window for window in [self, self.video_input, self.tools_overlay,
+                self.shortcuts_dialog, *[p.overlay for p in self.panes]] if window is not None]
 
     def handle_shortcut_key(self, event, receiver=None):
         # Numbers typed into URLs (including the fullscreen toolbar's dialogs)
         # must remain text, and modified keys retain their normal meaning.
         focus = QApplication.focusWidget()
         editors = (QLineEdit, QTextEdit, QPlainTextEdit, QAbstractSpinBox)
-        if (isinstance(focus, editors) or isinstance(receiver, editors) or
-                QApplication.activeModalWidget() or QApplication.activePopupWidget() or
-                event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier):
+        if QApplication.activeModalWidget() or QApplication.activePopupWidget():
             self._number_tap = None
             return False
+        modifiers = event.modifiers() & ~Qt.KeyboardModifier.KeypadModifier
+        digit = event.key() - Qt.Key.Key_0
+        if modifiers == Qt.KeyboardModifier.AltModifier and 1 <= digit <= 4:
+            self._number_tap = None
+            if not event.isAutoRepeat():
+                if self.count.currentIndex() == digit - 1:
+                    self.arrange()
+                else:
+                    self.count.setCurrentIndex(digit - 1)
+            if self.immersive:
+                self.show_controls(reason='shortcut')
+            return True
+        if isinstance(focus, editors) or isinstance(receiver, editors):
+            self._number_tap = None
+            return False
+        shifted = {Qt.Key.Key_Exclam: 1, Qt.Key.Key_At: 2, Qt.Key.Key_NumberSign: 3, Qt.Key.Key_Dollar: 4}
+        shifted_digit = shifted.get(event.key(), digit)
+        if modifiers == Qt.KeyboardModifier.ShiftModifier and 1 <= shifted_digit <= 4:
+            self._number_tap = None
+            if not event.isAutoRepeat() and shifted_digit <= 3 and self.count.currentIndex() == 2:
+                self.choose_three_layout(primary=shifted_digit)
+                if self.immersive:
+                    self.show_controls(reason='shortcut')
+            return True
+        if modifiers:
+            self._number_tap = None
+            return False
+        if event.key() in (Qt.Key.Key_G, Qt.Key.Key_H):
+            self._number_tap = None
+            if not event.isAutoRepeat():
+                if event.key() == Qt.Key.Key_H:
+                    self.toggle_shortcuts()
+                elif self.count.currentIndex() == 2:
+                    self.choose_three_layout(mode='grid' if self.three_pane_layout == 'focus' else 'focus')
+            return True
         if event.key() == Qt.Key.Key_F:
             self._number_tap = None
             if not event.isAutoRepeat():
@@ -720,6 +788,11 @@ class Wall(QMainWindow):
         if self.closing:
             return
         point = QCursor.pos()
+        if self.shortcuts_dialog and self.shortcuts_dialog.isVisible():
+            self.video_input.hide()
+            self.hide_controls()
+            self.last_pointer = point
+            return
         if self.immersive and QApplication.activeWindow() not in self.owned_windows():
             self.video_input.hide()
             for bar in [self.tools_overlay, *[p.overlay for p in self.panes]]:
@@ -733,6 +806,9 @@ class Wall(QMainWindow):
         self.last_pointer = point
 
     def position_video_input(self):
+        if self.shortcuts_dialog and self.shortcuts_dialog.isVisible():
+            self.video_input.hide()
+            return
         target = self.root.mapToGlobal(QPoint())
         self.video_input.setGeometry(QRect(target, self.root.size()))
         self.video_input.show()
@@ -759,8 +835,9 @@ class Wall(QMainWindow):
                 # Fullscreen omits the URL row: each HUD fits comfortably within
                 # its video, including two-pane views and larger UI font scales.
                 width = min(pane.width() - 12, 620)
-                height = pane.chrome.sizeHint().height() + 8
                 pane.overlay.setFixedWidth(width)
+                height = pane.chrome.heightForWidth(width - 8) if pane.chrome.hasHeightForWidth() else pane.chrome.sizeHint().height()
+                height += 8
                 pane.overlay.resize(width, height)
                 position = pane.mapToGlobal(pane.rect().bottomLeft())
                 pane.overlay.move(position.x() + (pane.width() - width) // 2, position.y() - height - 5)
@@ -772,7 +849,8 @@ class Wall(QMainWindow):
             bar.hide()
 
     def show_controls(self, reason='pointer'):
-        if not self.immersive or self.closing or QApplication.activeModalWidget():
+        if (not self.immersive or self.closing or QApplication.activeModalWidget() or
+                (self.shortcuts_dialog and self.shortcuts_dialog.isVisible())):
             return
         if not self.overlay_enabled:
             self.hide_controls()
@@ -787,6 +865,7 @@ class Wall(QMainWindow):
         self.position_controls()
         self.tools_overlay.reveal()
         point = QCursor.pos()
+        self.last_pointer = point
         # Show just the pane under the pointer. Native tool windows can be
         # repositioned by desktop work-area constraints; never let two HUDs
         # obscure one another, even with a dock or fractional display scaling.
@@ -823,19 +902,6 @@ class Wall(QMainWindow):
             audible = [pane for pane in self.panes if pane.audio.isChecked()]
             if audible:
                 self.select_audio(self.last_audio if self.last_audio in audible else audible[-1])
-
-    def select_cookies(self):
-        path, _ = QFileDialog.getOpenFileName(self, 'Select Netscape cookies.txt', '', 'Cookie files (*.txt);;All files (*)')
-        if path:
-            self.cookie_path = path
-            self.cookies.setText('Cookies selected')
-            self.cookies.setToolTip('Used on the next Load; cookie values stay in memory.')
-            self.session_changed()
-
-    def clear_cookies(self):
-        self.cookie_path = ''
-        self.cookies.setText('Cookies…')
-        self.session_changed()
 
     def arrange(self, *_):
         self._number_tap = None
@@ -899,6 +965,9 @@ class Wall(QMainWindow):
         self.showNormal() if self.isFullScreen() else self.showFullScreen()
 
     def restore(self):
+        if self.shortcuts_dialog and self.shortcuts_dialog.isVisible():
+            self.toggle_shortcuts()
+            return
         if self.expanded:
             self.arrange()
         if self.isFullScreen():
@@ -908,6 +977,8 @@ class Wall(QMainWindow):
         if not self.closing and self.recovery:
             self.recovery.before_close()
         self.closing = True
+        if self.shortcuts_dialog:
+            self.shortcuts_dialog.hide()
         if self.updater:
             self.updater.shutdown()
         self.video_input.hide()
@@ -947,16 +1018,6 @@ def main():
     except Exception:
         QMessageBox.critical(None, 'VLC required', 'Install VLC first: sudo apt install vlc libvlc5')
         return 1
-    app.setStyleSheet('''
-        QWidget { background: #151b29; color: #e5eaf3; font-size: 12px; }
-        QFrame#pane { border: 0; border-radius: 0; }
-        QFrame#hoverBar { background: #151b29; border: 1px solid #354159; border-radius: 4px; }
-        QLineEdit, QComboBox { background: #0e1420; padding: 3px; border: 1px solid #46546d; }
-        QPushButton { background: #293750; padding: 3px 5px; border-radius: 3px; }
-        QPushButton:hover { background: #3d5277; }
-        QPushButton:checked { background: #236953; }
-        QPushButton:disabled { color: #8791a3; }
-    ''')
     wall = Wall(instance)
     wall.show()
     from .recovery import SessionRecovery

@@ -3,12 +3,33 @@
 (() => {
     const patched = new WeakSet();
     const ids = new WeakMap();
-    let serial = 0, pending = 0;
+    let serial = 0, pending = 0, connected = false, scanTicks = 0;
+    const rejected = new WeakSet();
+    const configured = new WeakSet();
+    function boundPlayer(hls) {
+        if (!hls?.config) return;
+        // Hls.js otherwise permits an infinite retained back buffer. Apply before
+        // fragLoaded is delivered to the player's buffering controllers.
+        hls.config.backBufferLength = 10;
+        hls.config.liveBackBufferLength = 10;
+        hls.config.maxBufferLength = 12;
+        hls.config.maxMaxBufferLength = 24;
+        hls.config.maxBufferSize = 16 * 1024 * 1024;
+        const cap = globalThis.__game_stream_max_height || 0;
+        if (cap && hls.levels?.length && !configured.has(hls)) {
+            const allowed = hls.levels.map((level, index) => ({height: level.height, index}))
+                .filter(level => level.height > 0 && level.height <= cap);
+            // Providers without a lower rendition keep their lowest available level.
+            hls.autoLevelCapping = allowed.length ? allowed[allowed.length - 1].index : 0;
+            configured.add(hls);
+        }
+    }
     function forward(hls, event, data) {
+        boundPlayer(hls);
         if (event !== 'hlsFragLoaded' || !data?.frag || !data.payload) return;
         const frag = data.frag, media = hls.media;
         if (frag.type !== 'main' || !Number.isFinite(frag.sn) ||
-            !media || media.mediaKeys || pending >= 3) return;
+            !media || media.mediaKeys || rejected.has(hls) || pending >= 2) return;
         if (frag.decryptdata?.method && frag.decryptdata.method !== 'NONE') return;
         const bytes = new Uint8Array(data.payload.buffer || data.payload,
             data.payload.byteOffset || 0, data.payload.byteLength);
@@ -23,7 +44,11 @@
         Promise.resolve(globalThis.__game_stream_fragment({
             player: ids.get(hls), sequence: frag.sn, cc: frag.cc || 0,
             duration: frag.duration, bytes: btoa(binary)
-        })).catch(() => {}).finally(() => pending--);
+        })).then(accepted => {
+            if (accepted === false) rejected.add(hls);
+            else if (accepted === true) connected = true;
+        })
+            .catch(() => {}).finally(() => pending--);
     }
     function patch(Hls) {
         const proto = Hls?.prototype;
@@ -36,7 +61,8 @@
             return trigger.call(this, event, data, ...rest);
         };
     }
-    setInterval(() => {
+    function scan() {
+        if (connected && ++scanTicks % 10) return;
         try { patch(globalThis.Hls); } catch (_) {}
         try { if (typeof Hls !== 'undefined') patch(Hls); } catch (_) {}
         try { patch(globalThis.Clappr?.HLS?.HLSJS); } catch (_) {}
@@ -46,5 +72,8 @@
             patch(p?.core?.getCurrentPlayback?.()?._hls?.constructor);
         } catch (_) {}
         for (const video of document.querySelectorAll('video')) video.muted = true;
-    }, 100);
+    }
+    globalThis.__game_stream_scan = scan;
+    scan();
+    setInterval(scan, 100);
 })();

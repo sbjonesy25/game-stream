@@ -227,7 +227,9 @@ def test_current_version_does_not_download_and_cancel_does_not_close(package, mo
     monkeypatch.setattr(QMessageBox, 'information', notice)
     try:
         controller.check()
+        assert not wall.preferences_button.isEnabled()
         until(lambda: not controller.busy())
+        assert wall.preferences_button.isEnabled()
         assert notice.call_count == 1 and not wall.closing
         download.assert_not_called()
         controller.check()

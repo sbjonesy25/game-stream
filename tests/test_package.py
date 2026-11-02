@@ -80,7 +80,7 @@ def test_deb_structure_icons_manifest_and_no_root_pip(tmp_path):
     spec = importlib.util.spec_from_file_location('deb_builder', project / 'scripts/build-deb.py')
     builder = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(builder)
-    wheel = tmp_path / 'game_stream-0.2.3-py3-none-any.whl'
+    wheel = tmp_path / 'game_stream-0.2.4-py3-none-any.whl'
     with zipfile.ZipFile(wheel, 'w') as z:
         z.writestr('game_stream/__init__.py', '')
     deb = builder.build(wheel, tmp_path / 'out')

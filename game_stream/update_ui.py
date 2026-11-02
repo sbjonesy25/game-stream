@@ -54,6 +54,7 @@ class UpdateController(QObject):
     def start_worker(self, release=None):
         self.result = self.error = None
         self.wall.update_action.setEnabled(False)
+        self.wall.preferences_button.setEnabled(False)
         self.dialog = QProgressDialog('Downloading and verifying the update…' if release else 'Checking GitHub for updates…',
                                       'Cancel', 0, 100 if release else 0, self.wall)
         self.dialog.setWindowTitle('Game Stream update')
@@ -121,6 +122,7 @@ class UpdateController(QObject):
         if worker:
             worker.deleteLater()
         self.wall.update_action.setEnabled(True)
+        self.wall.preferences_button.setEnabled(True)
         if result is not None:
             self.handle_result(result, cancelled)
         elif error and not cancelled:

@@ -8,11 +8,11 @@ The normal viewing window does not embed the source website.
 
 ## Shareable Ubuntu installer
 
-Download **[game-stream_0.2.3_amd64.deb](releases/game-stream_0.2.3_amd64.deb)**
+Download **[game-stream_0.2.4_amd64.deb](releases/game-stream_0.2.4_amd64.deb)**
 from `releases/` and install with:
 
 ```bash
-sudo apt install ./game-stream_0.2.3_amd64.deb
+sudo apt install ./game-stream_0.2.4_amd64.deb
 ```
 
 This is the Ubuntu/Linux installer; Android APK files do not run on Ubuntu.
@@ -45,8 +45,7 @@ download still require a host test.
 
 ### Update an installed application
 
-Install v0.2.3 manually once to get the updater. After that, use **App → Check for
-Updates…**. When a newer version is available, choose Yes to download it. Playback
+Install the current v0.2.4 package to get these controls. After that, use **Preferences → Updates → Save & check for updates…**. When a newer version is available, choose Yes to download it. Playback
 continues during the download; you can cancel without closing the app. The app
 checks the size, SHA256 checksum and Debian package name/version/architecture,
 saves the session, then closes all its source browsers. A detached helper waits
@@ -79,7 +78,7 @@ missing authorization or a GitHub access limit. The old message alone cannot
 identify which response your machine received.
 
 On HTTP 401/403/404, the updater can use your existing GitHub CLI login. For a
-private repository, install v0.2.3 manually once, then run as your normal user:
+private repository, install the current package manually once if needed, then run as your normal user:
 
 ```bash
 sudo apt install gh
@@ -87,7 +86,7 @@ gh auth login
 ```
 
 Sign in to GitHub.com with an account that can read `sbjonesy25/game-stream`, then
-retry **App → Check for Updates…**. The app calls `gh api` directly, with prompts
+retry **Preferences → Updates → Save & check for updates…**. The app calls `gh api` directly, with prompts
 disabled; GitHub CLI handles credentials. Tokens/passwords are never copied into
 Game Stream config, logs or installer files. Each friend using private-repository
 updates needs their own repository access. Public update files do not require
@@ -223,8 +222,8 @@ installs the browser version that matches it.
 
 ## Use
 
-1. Leave **Show browser** enabled (the default), choose **1–4 panes**, paste a
-   page link, and press **Load** or Enter.
+1. Leave **Preferences → Playback → Show browser** enabled (the default), choose
+   **1–4 panes** (or Alt+1–4), paste a page link, and press **Load** or Enter.
 2. In the Chromium window, complete ordinary login/consent prompts and press
    **Play**. Wait for a few video segments to buffer (usually 10–20 seconds).
    With a supported Hls.js/Clappr MPEG-TS player, video starts in the app and the
@@ -232,8 +231,9 @@ installs the browser version that matches it.
    **Keep that browser open**: it handles stream renewals and decoding the site's
    transport. The browser is muted; VLC owns the audible output. Stop or close
    Game Stream to close the associated browser, worker, and local relay.
-3. Use **Audio on/off** and each pane's volume slider. **Solo audio** automatically
-   mutes other panes when you enable one. Uncheck it to mix several streams.
+3. Use **Audio on/off** and each pane's volume slider. **Preferences → Playback →
+   Solo audio** mutes other panes when you enable one. Disable it to mix streams.
+   Loading a new stream and the audio shortcuts always select exclusive audio.
 4. **Expand** fills the wall with one pane and selects its audio while other loaded streams keep running.
    **F** or **F11** makes the window fullscreen; combine these for a single fullscreen
    stream. **Esc** restores the grid and exits fullscreen.
@@ -254,7 +254,7 @@ installs the browser version that matches it.
 
 For a direct `.m3u8` URL, no browser is needed. Ordinary detected HLS URLs can
 also use the HTTP relay, allowing the browser to close after discovery. Uncheck
-**Show browser** to try automatic playback without a visible window. Some sites
+**Preferences → Playback → Show browser** to try playback without a visible window. Some sites
 need a real player click, so visible browser mode is recommended first.
 
 ### Layout and Preferences
@@ -265,28 +265,56 @@ in v0.2.3. Paste a source link or use Paste & Load to start a stream.
 For three streams, select **3 panes** and press **F** or **F11**. By default,
 fullscreen uses **Large stream + two**: one large pane on the left and two smaller
 panes stacked on the right, using the whole canvas without an empty fourth cell.
-Choose **Layout → Large stream → Quadrant 1 / 2 / 3** to select the large stream.
+Choose **Layout → Large stream → Quadrant 1 / 2 / 3**, or press **Shift+1 / 2 / 3**,
+to select the large stream.
 This rearranges running panes without restarting players, changing audio, or
 recreating native video windows. **Layout → Grid** restores the original grid.
 The Layout button appears when three panes are enabled and is available in the
 fullscreen top controls. Windowed mode retains the normal grid. Video keeps its
 aspect ratio, so individual panes can still have letterboxing.
 
-**Preferences** also configures the layout and large-stream choice, double-tap
-interval, audio border and fullscreen overlays. Layout choices persist between
-launches. Preferences live in `~/.config/game-stream/config.json` (or
+**Preferences** has three tabs:
+
+- **Playback**: Show browser, Solo audio, three-pane layout, large stream and
+  double-tap interval and browser source quality. The source-quality cap defaults
+  to **720p** for four-stream use; choose **1080p** or **Automatic** if desired. It
+  applies to new browser bridge loads when multiple renditions exist; single-quality
+  providers may exceed it. Direct HLS URLs are unchanged. Browser changes apply to subsequent loads. Enabling Solo
+  audio immediately selects a single audible source.
+- **Appearance**: **Default** (original colors), **Light** (near 0.9 gray), or
+  **Dark** (near 0.1 gray/black), audio border, overlay visibility/duration/opacity and button
+  text size. Overlays default to **85% opacity**; choose **25–100%**. Button text
+  defaults to **12 px**, adjustable from **9–24 px** in windowed/fullscreen controls.
+  Controls wrap to fit narrow panes at larger text sizes. Fullscreen video geometry
+  and 2-pixel gaps stay unchanged. Desktop compositing supplies the transparency.
+- **Updates**: **Save & check for updates…** saves your edits, closes Preferences,
+  checks the repository, then offers installation if a newer package exists.
+
+The toolbar now holds Preferences, Layout (with three panes), pane count and
+fullscreen. Show browser/Solo audio are in Playback; the App and cookie buttons
+are removed. Layout/appearance choices persist between launches. Restoring a
+session restores that session's Show browser/Solo audio choices; Preferences
+reflects the actual active choices when opened.
+
+Preferences live in `~/.config/game-stream/config.json` (or
 `$XDG_CONFIG_HOME/game-stream/config.json`). Example:
 
 ```json
 {
   "three_pane_layout": "focus",
   "three_pane_primary": 1,
+  "solo_audio": true,
+  "show_browser": true,
+  "browser_max_height": 720,
+  "theme": "default",
   "double_tap_ms": 350,
   "audio_border_enabled": true,
   "audio_border_color": "#00ff00",
   "overlay_enabled": true,
   "overlay_on_shortcuts": true,
-  "overlay_timeout_ms": 2200
+  "overlay_timeout_ms": 2200,
+  "overlay_opacity_percent": 85,
+  "button_text_size": 12
 }
 ```
 
@@ -320,6 +348,10 @@ Editing an input field alone does not stop playback; loading the replacement doe
 
 Preferences also controls fullscreen overlays:
 
+- `overlay_opacity_percent`: **25–100%**, default **85%**, including the buttons.
+  Fading and subsequent mouse reveals retain the chosen opacity.
+- `button_text_size`: **9–24 px**, default **12 px**; larger buttons wrap within
+  each pane instead of overlapping adjacent videos.
 - `overlay_timeout_ms`: idle duration, default **2200 ms**; **0** keeps revealed
   controls visible until leaving fullscreen or switching applications.
 - `overlay_on_shortcuts`: disable automatic controls after audio/zoom/fullscreen
@@ -336,20 +368,29 @@ files gain safe defaults automatically. Three-pane settings use
 ### Keyboard and double-click controls
 
 Shortcuts work while Game Stream has focus, including its floating controls.
-They do not intercept digits or F typed into a URL or other text field, dialogs,
-modified shortcuts, or open dropdowns. Keys for panes outside the selected
-1–4 pane count are ignored. Holding a key does not repeatedly toggle it.
+Plain digit/F/G/H and Shift+digit shortcuts preserve text typed into URLs and other
+editors (including !@#$). Alt+1–4 also works from a URL field. Dialogs/open menus
+and other modified combinations keep their normal keyboard behavior. Keys for
+hidden panes are ignored. Holding a key does not repeatedly toggle it.
 
 | Key / action | Result |
 | --- | --- |
+| `Alt+1`, `Alt+2`, `Alt+3`, `Alt+4` | Show 1, 2, 3, or 4 panes; return from zoom to that grid. Hidden streams stop/mute; links remain. |
+| `Shift+1`, `Shift+2`, `Shift+3` | Choose the large stream in three-pane mode, preserving audio. Works with shifted digit symbols/keypad too. Shift+4 has no effect. |
 | `1`, `2`, `3`, `4` | Select only that quadrant's audio, even with Solo audio unchecked. |
 | Double-tap `1`, `2`, `3`, `4` | Same zoom/audio action as `5`, `6`, `7`, `8`. Single taps still select audio immediately. |
 | `0` | Mute all; press again to restore the last selected audio source. |
 | `5`, `6`, `7`, `8` | Zoom quadrant 1, 2, 3, or 4 and select its audio. Enter fullscreen if needed. |
 | Same zoom key again | Return to the selected pane grid, staying fullscreen and preserving audio/mute. |
 | Double-click video while fullscreen | Zoom that quadrant and select its audio; double-click again to restore the grid without changing audio/mute. |
+| `G` | Toggle Grid / Large stream + two with three panes selected; preserve audio. |
+| `H` | Show / hide a shortcut reference window; H again or Esc closes it. |
 | `F` or `F11` | Toggle window fullscreen. |
 | `Esc` | Restore the grid and leave fullscreen. |
+
+H opens a nonmodal shortcut reference. Playback keeps running while it is open.
+It reuses one window; H again, Close or Esc dismisses it. Fullscreen control
+overlays stay behind the reference while it is visible.
 
 The default double-tap interval is 350 ms; Preferences allows 150–800 ms.
 Auto-repeat from holding a key is ignored. A second quick tap converts the first
@@ -381,20 +422,22 @@ normal rolling HLS stream for VLC. It does not copy the website into the app,
 reverse-engineer the site's decoder, record streams to disk, or extract DRM keys.
 Each pane has an independent browser and relay. The first supported media player
 in that session supplies its relay; other players cannot mix fragments into it.
-The buffer retains at most 12 segments and 64 MiB per pane.
+The buffer retains at most **8 segments / 48 MiB per pane** (192 MiB across four
+relays). The displayed HLS window still uses the latest six segments.
 
 This mode keeps both Chromium and VLC active, so four HD streams can use more
 CPU/GPU memory than four direct HLS URLs. Minimize the source windows rather
 than closing them. The app disables browser background throttling and keeps
 source video muted to avoid duplicate audio.
 
-### Importing cookies
+### Browser sessions and legacy cookie imports
 
-Select a **Netscape-format `cookies.txt`** file using **Cookies…**. Export it
-yourself from a browser session you control; the app does not extract browser
-databases or passwords. Cookies apply to subsequent loads, scoped to their
-paths/domains. Brave's profile is not shared automatically. Session cookies with
-expiry `0` are supported. Do not commit or share cookie files.
+Cookie import/clear buttons were removed in v0.2.4. Use the source Chromium window
+for normal playback/login/consent; Brave's profile is not shared automatically.
+Existing cookie-file references restored from older sessions remain supported.
+Cookies stay scoped to their paths/domains, and original files stay untouched.
+Decline session restoration to start without an old import. Cookie files and
+browser passwords are never bundled into installers.
 
 For ordinary HLS, captured Referer, Origin, User-Agent and same-origin
 Authorization headers accompany relay requests. Nested playlists, media, keys,
@@ -402,8 +445,70 @@ and initialization segments pass through that relay. Signed query strings are
 preserved, cookies stay domain scoped, and Authorization does not cross origins.
 Both relay types bind only to `127.0.0.1` on random ports with random resource
 paths. Cookie values and signed upstream URLs are not written to app logs.
-**Clear cookies** clears the selected import file for future loads; stop existing
-streams to discard active sessions. The original file stays untouched.
+
+### Memory and four-stream use
+
+v0.2.4 bounds the HTTP relay's formerly unlimited URL lookup table to 2,048
+entries and four million URL characters (each URI is limited to 16,384 characters).
+Recent URLs are retained, and the original VLC master URL stays valid. Stop clears
+the maps and fragment caches. No network writes occur while holding the browser
+fragment-cache lock, avoiding a slow client blocking incoming fragments/cleanup.
+
+For supported Hls.js players, the capture hook applies a **10-second back buffer**,
+**12-second forward target / 24-second maximum target**, and **16 MiB forward-buffer
+size target**. These player settings are not a hard Chromium RAM limit. Complete
+TS segments still have independent bounded relay storage. Only two fragment
+copies per frame may be in flight; rejected players stop forwarding. Initial
+capture hooks install before automatic Play, and discovery response subscriptions
+are removed after handoff. Connected-player scanning and resolver polling slow
+down once video is established. Each Playwright driver's Node old-space budget
+defaults to 512 MiB to encourage earlier garbage collection; explicit user
+`NODE_OPTIONS` are preserved. No browser renderer or VLC process is forcibly killed
+for crossing a memory limit.
+
+Four browser-assisted streams still require four source browsers plus VLC's
+players. Keep **Show browser / Solo audio on** and **720p source quality** as a
+starting point on a 16 GB host. Hiding a browser does not eliminate its decoding
+work. Higher qualities, source-page ads/scripts, native GPU buffers and other
+applications can add substantial memory; these fixes do not promise a 16 GB
+system-wide cap. Browser/GPU/native VLC behavior must be checked on the host.
+
+To record the installed app and its child browsers/automation processes, find its
+Python process ID and replace `12345` below:
+
+```bash
+pgrep -n -f '[g]ame_stream.app'
+python3 scripts/monitor-resources.py --pid 12345 --seconds 1800 --output game-stream-memory.json
+```
+
+Run as your normal desktop user while four streams play. The private JSON report
+contains only process counts, PSS (shared memory counted proportionally), swap,
+time and unavailable-process counts. It does not read command lines, URLs, cookies
+or passwords. It preserves samples on Ctrl+C. A count of unreadable processes means
+the total is incomplete. This helps compare memory after warm-up and at a stall.
+
+A **604-second synthetic run** with the resource limits forwarded 601 fragments
+per source with all four FFmpeg readers still running. After a 300-second warm-up,
+process-tree PSS ranged **2,673.8–2,735.8 MiB**; combined relay media stayed at
+**18,732,320 bytes**. Cleanup returned the test tree from 49 processes to 1.
+The cloud has no configured swap, so this does not validate actual swap pressure.
+Raw measurements, test conditions and limitations are in
+[`validation/resource-soak-0.2.4.json`](validation/resource-soak-0.2.4.json).
+
+A reproducible synthetic soak runs four real Chromium/Hls.js 720p15 players and
+four FFmpeg readers. It requires FFmpeg, Playwright Chromium/system Chromium and a
+local Hls.js bundle (development used Hls.js 1.6.16). Run separately from the app:
+
+```bash
+.venv/bin/python scripts/soak-browser-resources.py --hls-js /path/to/hls.min.js --seconds 600 --output browser-resource-soak.json
+```
+
+The fixture generates its own video/audio and serves only loopback traffic. Its
+Hls.js worker/progressive path is disabled so complete clear TS events exercise
+the bridge, matching the supported custom transport. It does not reproduce the
+live site's ads, token renewal, GPU behavior, or native VLC. A synthetic result
+therefore does not establish a fix for every cause of an actual 30-minute host
+stall. The app's raw input transport and supported-provider limitations still apply.
 
 ### Compatibility limits
 
@@ -462,7 +567,7 @@ Close Game Stream, then from this checkout run:
 git pull
 ./scripts/uninstall-current-setup.sh --dry-run
 ./scripts/uninstall-current-setup.sh
-sudo apt install ./releases/game-stream_0.2.3_amd64.deb
+sudo apt install ./releases/game-stream_0.2.4_amd64.deb
 ```
 
 This removes old launcher/icon registration and only an editable console package
@@ -473,7 +578,7 @@ preferences too. Custom/symlinked environments and unrelated package installs
 are left alone. Launch the installed app from Applications afterward.
 
 The installer already provides **`game-stream-uninstall`**. A separate
-**[`game-stream-uninstaller_0.2.3.tar.gz`](releases/game-stream-uninstaller_0.2.3.tar.gz)**
+**[`game-stream-uninstaller_0.2.4.tar.gz`](releases/game-stream-uninstaller_0.2.4.tar.gz)**
 bundle and **[`uninstall-game-stream.sh`](releases/uninstall-game-stream.sh)**
 are also included in `releases/`; they work without a checkout or Qt/Python app
 runtime. Run `bash uninstall-game-stream.sh` as your normal desktop user. The
@@ -500,7 +605,7 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `GAME_STREAM_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **62 tests passed on Python 3.12 and 3.14** with
+Current development validation: **74 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
@@ -520,7 +625,14 @@ clipboard validation, overlay options, serialized browser replacement, stale
 callbacks, cancelled queued restarts, and source-environment cleanup. Layout tests
 cover F/F11 and URL editing, three-pane canvas coverage, all large-stream choices,
 unchanged native video handles/playback/audio, grid/zoom round trips, legacy config
-migration and fullscreen single-stream border suppression. Update tests
+migration and fullscreen single-stream border suppression. Added tests cover
+Alt pane counts, Shift large-stream choices with real shifted symbols, text editing,
+preferences playback flags/session consistency, update handoff after closing the
+settings modal, opacity across fade/reveal, font changes and wrapped button bounds.
+Resource/theme tests cover G/H without intercepting URLs, reusable help/Esc behavior,
+palette switching and persistence, four bounded caches after 20,000 fragment pushes,
+10,000 playlist rewrites, URL-byte budgets, Hls.js buffering/quality configuration,
+other-player rejection and credential-free process-tree memory reports. Update tests
 check real Debian package identity, checksums/size limits, cancellation, source-install
 rejection, shutdown-before-install ordering, authorization cancellation, restart as
 the desktop user, session saving and staged-package tampering. A local fake GitHub
@@ -538,7 +650,16 @@ test below. This cloud machine lacks libVLC and cannot install system packages.
 
 Host smoke test:
 
-- With the installed package, use App → Check for Updates. Once a newer release
+- Switch Default / Light / Dark themes, toggle G in a three-pane view, and use H
+  twice (plus Esc) while streams play. Confirm the help popup stays above video.
+- Run four streams for at least 30 minutes on the 16 GB host and capture the
+  memory report. Check warm-up, steady state, swap and UI/audio responsiveness.
+
+- Test Alt+1–4 pane counts, Shift+1–3 large stream selection, and typing !@#$ in
+  URLs. Use Preferences to change Show browser/Solo audio, opacity and text size;
+  confirm settings persist and overlays are translucent above native VLC video.
+
+- With the installed package, use Preferences → Updates to check/install updates. Once a newer release
   is published, verify download, admin authorization, browser closure, installation,
   normal-user relaunch and session restoration. Test cancellation before download
   completion and at the authorization prompt.

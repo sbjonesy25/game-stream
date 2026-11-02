@@ -43,9 +43,11 @@ def load_cookies(path):
 
 
 def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
-            on_ready=None, on_status=None, auto_play=False):
+            on_ready=None, on_status=None, auto_play=False, max_height=720):
     """With on_ready, run a browser bridge until cancellation; otherwise discover HLS."""
     validate_url(url)
+    if type(max_height) is not int or max_height not in (0, 720, 1080):
+        raise ValueError('Invalid browser source quality')
     cookies = load_cookies(cookie_file)
     if urlsplit(url).path.lower().endswith('.m3u8'):
         source = Source(url, cookies=cookies)
@@ -55,6 +57,10 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
     from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout
     from .bridge import BrowserRelay
     cancel = cancel or Event()
+    # Four independent automation drivers must not each wait for a multi-GB
+    # Node heap before collecting transient base64/JSON fragment messages.
+    # Preserve any explicit user Node configuration.
+    os.environ.setdefault('NODE_OPTIONS', '--max-old-space-size=512')
     with sync_playwright() as p:
         executable = os.environ.get('GAME_STREAM_CHROMIUM') or os.environ.get('STREAMWALL_CHROMIUM')
         if not executable and not os.path.exists(p.chromium.executable_path):
@@ -75,14 +81,17 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                         return
                     if bridge is None:
                         bridge = BrowserRelay()
-                    bridge.push((binding['frame'], message.get('player')), message)
+                    return bridge.push((binding['frame'], message.get('player')), message)
                 context.expose_binding('__game_stream_fragment', fragment)
-                context.add_init_script(path=str(Path(__file__).with_name('browser_bridge.js')))
+                script = Path(__file__).with_name('browser_bridge.js').read_text()
+                context.add_init_script(script=f'globalThis.__game_stream_max_height = {max_height};\n' + script)
             page = context.new_page()
             context.on('page', lambda popup: popup.close())
             found = []
 
             def inspect(response):
+                if found:
+                    return
                 mime = response.headers.get('content-type', '').lower()
                 if not found and response.ok and ('.m3u8' in urlsplit(response.url).path.lower() or
                                     'mpegurl' in mime):
@@ -100,6 +109,8 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                     raise RuntimeError('The source browser was closed. Load again and leave it running during playback.')
                 if bridge and bridge.ready and not announced:
                     announced = True
+                    page.remove_listener('response', inspect)
+                    found.clear()
                     source = Source(bridge.url, relay=bridge)
                     on_ready(source)
                     if on_status:
@@ -125,12 +136,12 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                 if not announced and monotonic() > deadline:
                     raise RuntimeError('No supported video detected. In browser mode, press Play and wait for video. '
                                        'Supported players: HLS URLs and Hls.js/Clappr MPEG-TS. DRM and DASH are unsupported.')
-                # Never click a playing video: that would pause the source. Catalog
-                # selections can try Play even in visible mode; manual links keep
-                # their existing interaction behavior.
+                # Never click a playing video: that would pause the source.
+                # Explicit auto_play callers can try Play in visible mode too.
                 if (not visible or auto_play) and not announced and monotonic() - last_click > 5:
                     for frame in page.frames:
                         try:
+                            frame.evaluate('() => globalThis.__game_stream_scan?.()')
                             paused = frame.evaluate("""() => ![...document.querySelectorAll('video')].some(v => !v.paused)""")
                             if not paused:
                                 continue
@@ -155,7 +166,7 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                             except Exception:
                                 pass
                     last_click = monotonic()
-                page.wait_for_timeout(150)
+                page.wait_for_timeout(500 if announced else 150)
             if not announced:
                 raise RuntimeError('Cancelled')
         finally:

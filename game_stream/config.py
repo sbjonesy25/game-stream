@@ -6,9 +6,11 @@ from pathlib import Path
 import tempfile
 
 DEFAULTS = dict(three_pane_layout='focus', three_pane_primary=1,
+                solo_audio=True, show_browser=True, browser_max_height=720, theme='default',
                 double_tap_ms=350, audio_border_enabled=True,
                 audio_border_color='#00ff00', overlay_enabled=True,
-                overlay_on_shortcuts=True, overlay_timeout_ms=2200)
+                overlay_on_shortcuts=True, overlay_timeout_ms=2200,
+                overlay_opacity_percent=85, button_text_size=12)
 
 
 def xdg_path(variable, fallback, suffix):
@@ -42,6 +44,10 @@ class ConfigStore:
 
     def validate(self, data):
         value = {**DEFAULTS, **data}
+        if value['theme'] not in ('default', 'light', 'dark'):
+            raise ValueError('Choose Default, Light or Dark theme')
+        if type(value['browser_max_height']) is not int or value['browser_max_height'] not in (0, 720, 1080):
+            raise ValueError('Browser source quality must be Automatic, 720p or 1080p')
         if value['three_pane_layout'] not in ('focus', 'grid'):
             raise ValueError('Choose a valid three-pane layout')
         if type(value['three_pane_primary']) is not int or not 1 <= value['three_pane_primary'] <= 3:
@@ -53,7 +59,12 @@ class ConfigStore:
             raise ValueError('Audio border color must be a six-digit hex color, such as #00ff00')
         if type(value['overlay_timeout_ms']) is not int or not 0 <= value['overlay_timeout_ms'] <= 30000:
             raise ValueError('Overlay duration must be 0–30000 ms')
-        if any(type(value[k]) is not bool for k in ('audio_border_enabled', 'overlay_enabled', 'overlay_on_shortcuts')):
+        if type(value['overlay_opacity_percent']) is not int or not 25 <= value['overlay_opacity_percent'] <= 100:
+            raise ValueError('Overlay opacity must be 25–100%')
+        if type(value['button_text_size']) is not int or not 9 <= value['button_text_size'] <= 24:
+            raise ValueError('Button text size must be 9–24 px')
+        if any(type(value[k]) is not bool for k in ('audio_border_enabled', 'overlay_enabled',
+                'overlay_on_shortcuts', 'solo_audio', 'show_browser')):
             raise ValueError('Invalid preferences')
         return {key: value[key] for key in DEFAULTS}
 

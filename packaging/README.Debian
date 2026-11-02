@@ -2,7 +2,7 @@ Game Stream for Ubuntu amd64
 ===========================
 
 Install with:
-  sudo apt install ./game-stream_0.2.3_amd64.deb
+  sudo apt install ./game-stream_0.2.4_amd64.deb
 
 Open Applications > Game Stream. First launch requires internet and about 2 GB
 of free disk space for its private Python dependencies and Chromium browser.
@@ -30,17 +30,23 @@ This is not an Android APK and does not run on Android.
 
 Standalone uninstall tools are also distributed with each release:
   bash uninstall-game-stream.sh [--dry-run] [--purge-user-data]
-The game-stream-uninstaller_0.2.3.tar.gz bundle contains this script and instructions.
+The game-stream-uninstaller_0.2.4.tar.gz bundle contains this script and instructions.
 
-Release 0.2.3 removes Games menus/background scraping, adds F beside F11,
-and offers a three-pane fullscreen layout with a selectable large stream.
-Single-stream fullscreen hides the audio border. Layout/preferences persist.
+Release 0.2.4 adds Alt+1-4 pane counts, Shift+1-3 large-stream selection,
+G layout toggle, H shortcut reference, Default/Light/Dark themes,
+overlay opacity (25-100%, default 85%) and button text size (9-24px, default 12px).
+Controls wrap inside narrow panes when needed. Preferences has Playback,
+Appearance and Updates tabs; Show browser, Solo audio and Check/Install Updates
+are located there. Cookie buttons and the App menu are removed.
+Update checks save settings and close the modal before starting the updater.
 Updates verify a .deb from the project's GitHub repository, save/close the app,
 request administrator authorization with pkexec, install and reopen as the user.
-HTTP error statuses are shown and logged to ~/.local/state/game-stream/update.log.
-For private repository updates, install GitHub CLI (sudo apt install gh) and run
-'gh auth login' as the normal user with an account that can read the repository.
-Game Stream uses that CLI login without reading or storing its credentials.
-Each recipient of private updates needs repository access. Install v0.2.3 manually
-once if the old updater cannot download. Cancelled authorization reopens the
-installed version; download failures leave playback running.
+For this private repository, use 'gh auth login' with an account that can read it.
+Diagnostics are in ~/.local/state/game-stream/update.log. Each recipient of
+private updates needs repository access. Download failures leave playback running.
+
+Browser source quality defaults to 720p when the provider offers variants.
+Supported Hls.js buffers, live fragment caches and HTTP relay URL tables are
+bounded. Playwright drivers use a 512MiB Node old-space budget unless the user
+supplied NODE_OPTIONS. This is not a hard limit on browser/GPU/native VLC memory.
+Use the repository's monitor-resources.py to record a real host's 30-minute run.

@@ -250,6 +250,7 @@ def test_double_click_input_above_native_video_and_audio():
             pane = wall.panes[count - 1]
             point = wall.video_input.mapFromGlobal(pane.mapToGlobal(pane.rect().center()))
             QTest.mouseDClick(wall.video_input, Qt.MouseButton.LeftButton, pos=point)
+            QTest.mouseRelease(wall.video_input, Qt.MouseButton.LeftButton, pos=point)
             app.processEvents()
             assert wall.expanded is pane
             assert pane.audio.isChecked()
@@ -257,6 +258,8 @@ def test_double_click_input_above_native_video_and_audio():
             # Returning to the grid must not switch audio away from this stream.
             QTest.mouseDClick(wall.video_input, Qt.MouseButton.LeftButton,
                              pos=wall.video_input.rect().center())
+            QTest.mouseRelease(wall.video_input, Qt.MouseButton.LeftButton,
+                               pos=wall.video_input.rect().center())
             app.processEvents()
             assert wall.expanded is None
             assert wall.isFullScreen()
