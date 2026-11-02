@@ -76,6 +76,17 @@ class PreferencesDialog(QDialog):
         for name in ('default', 'light', 'dark'):
             self.theme.addItem(name.title(), name)
         self.theme.setCurrentIndex(self.theme.findData(current['theme']))
+        self.number_labels = QCheckBox('Show quadrant numbers over video')
+        self.number_labels.setChecked(current['quadrant_labels_enabled'])
+        self.number_size = QSpinBox()
+        self.number_size.setRange(10, 64)
+        self.number_size.setSuffix(' px')
+        self.number_size.setValue(current['quadrant_label_size'])
+        self.number_corner = QComboBox()
+        for label, corner in [('Top left', 'top-left'), ('Top right', 'top-right'),
+                              ('Bottom left', 'bottom-left'), ('Bottom right', 'bottom-right')]:
+            self.number_corner.addItem(label, corner)
+        self.number_corner.setCurrentIndex(self.number_corner.findData(current['quadrant_label_corner']))
         self.three_layout = QComboBox()
         self.three_layout.addItem('Large stream + two (fullscreen)', 'focus')
         self.three_layout.addItem('Grid', 'grid')
@@ -94,6 +105,9 @@ class PreferencesDialog(QDialog):
         form.addRow('Overlay idle duration', self.overlay_delay)
         form.addRow('Overlay opacity', self.opacity)
         form.addRow('Button text size', self.text_size)
+        form.addRow('Quadrant numbers', self.number_labels)
+        form.addRow('Number size', self.number_size)
+        form.addRow('Number corner', self.number_corner)
         hint = QLabel('Alt+1–4: visible pane count. Shift+1–3: large stream in three-pane mode. '
                       'F / F11: fullscreen. Reducing the pane count stops hidden streams; their links are kept.')
         hint.setWordWrap(True)
@@ -129,7 +143,9 @@ class PreferencesDialog(QDialog):
                 overlay_enabled=self.overlays.isChecked(), overlay_on_shortcuts=self.shortcut_overlays.isChecked(),
                 overlay_timeout_ms=self.overlay_delay.value(), overlay_opacity_percent=self.opacity.value(),
                 button_text_size=self.text_size.value(), solo_audio=self.solo.isChecked(), show_browser=self.browser.isChecked(),
-                theme=self.theme.currentData(), browser_max_height=self.quality.currentData()))
+                theme=self.theme.currentData(), browser_max_height=self.quality.currentData(),
+                quadrant_labels_enabled=self.number_labels.isChecked(), quadrant_label_size=self.number_size.value(),
+                quadrant_label_corner=self.number_corner.currentData()))
         except ValueError as exc:
             QMessageBox.warning(self, 'Preferences not saved', str(exc))
             return False

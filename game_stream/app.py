@@ -19,6 +19,7 @@ from .config import DEFAULTS
 from .flow_layout import FlowLayout
 from .themes import PALETTES, stylesheet
 from .shortcuts import ShortcutDialog
+from .quadrant_labels import NumberBadge, label_font, label_size, label_rect, paint_label
 
 
 class FloatingBar(QFrame):
@@ -85,6 +86,13 @@ class VideoInputLayer(QWidget):
                 if pane.isVisible() and pane.audio.isChecked():
                     rect = QRect(self.mapFromGlobal(pane.mapToGlobal(QPoint())), pane.size())
                     painter.drawRect(rect.adjusted(0, 0, -1, -1))
+        if self.wall.quadrant_labels_enabled:
+            font = label_font(self.wall.quadrant_label_size)
+            size = label_size(font)
+            for pane in self.wall.panes:
+                if pane.isVisible():
+                    video = QRect(self.mapFromGlobal(pane.video.mapToGlobal(QPoint())), pane.video.size())
+                    paint_label(painter, label_rect(video, size, self.wall.quadrant_label_corner), pane.number, font)
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton and self.wall.immersive:
@@ -157,6 +165,7 @@ class Pane(QFrame):
         chrome_layout.setSpacing(2)
         self.layout.addWidget(self.chrome)
         self.overlay = FloatingBar(wall)
+        self.number_badge = NumberBadge(wall, number)
         self.entry = QWidget()
         entry = QHBoxLayout(self.entry)
         entry.setContentsMargins(0, 0, 0, 0)
@@ -406,6 +415,9 @@ class Wall(QMainWindow):
         self.shortcuts_dialog = None
         self.theme = DEFAULTS['theme']
         self.browser_max_height = DEFAULTS['browser_max_height']
+        self.quadrant_labels_enabled = DEFAULTS['quadrant_labels_enabled']
+        self.quadrant_label_size = DEFAULTS['quadrant_label_size']
+        self.quadrant_label_corner = DEFAULTS['quadrant_label_corner']
         self.setStyleSheet(stylesheet(self.theme))
         self.updater = None
         self.double_tap_ms = 350
@@ -511,6 +523,7 @@ class Wall(QMainWindow):
         for pane in self.panes:
             pane.update_audio_border()
         self.video_input.update()
+        self.position_number_badges()
 
     def apply_view_preferences(self, value):
         theme_changed = self.theme != value['theme']
@@ -518,10 +531,13 @@ class Wall(QMainWindow):
                           self.three_pane_primary != value['three_pane_primary'])
         for key in ('audio_border_enabled', 'audio_border_color', 'overlay_enabled',
                     'overlay_on_shortcuts', 'overlay_timeout_ms', 'three_pane_layout', 'three_pane_primary',
-                    'overlay_opacity_percent', 'button_text_size', 'theme', 'browser_max_height'):
+                    'overlay_opacity_percent', 'button_text_size', 'theme', 'browser_max_height',
+                    'quadrant_labels_enabled', 'quadrant_label_size', 'quadrant_label_corner'):
             setattr(self, key, value[key])
         if theme_changed:
             self.setStyleSheet(stylesheet(self.theme))
+        for pane in self.panes:
+            pane.number_badge.configure(self.quadrant_label_size)
         self.idle.setInterval(self.overlay_timeout_ms or 2200)
         if not self.overlay_enabled or self.overlay_timeout_ms == 0:
             self.idle.stop()
@@ -612,6 +628,8 @@ class Wall(QMainWindow):
                 pane.load(take_audio=False)
 
     def eventFilter(self, watched, event):
+        if watched in (self, self.root) and event.type() in (QEvent.Type.Move, QEvent.Type.Resize):
+            QTimer.singleShot(0, self.position_number_badges)
         if watched is self.root and self.immersive and event.type() in (QEvent.Type.Resize, QEvent.Type.Move):
             QTimer.singleShot(0, self.align_video_input)
         owned = isinstance(watched, QWidget) and watched.window() in self.owned_windows()
@@ -631,7 +649,8 @@ class Wall(QMainWindow):
 
     def owned_windows(self):
         return [window for window in [self, self.video_input, self.tools_overlay,
-                self.shortcuts_dialog, *[p.overlay for p in self.panes]] if window is not None]
+                self.shortcuts_dialog, *[p.overlay for p in self.panes],
+                *[p.number_badge for p in self.panes]] if window is not None]
 
     def handle_shortcut_key(self, event, receiver=None):
         # Numbers typed into URLs (including the fullscreen toolbar's dialogs)
@@ -787,6 +806,7 @@ class Wall(QMainWindow):
     def poll_pointer(self):
         if self.closing:
             return
+        self.position_number_badges()
         point = QCursor.pos()
         if self.shortcuts_dialog and self.shortcuts_dialog.isVisible():
             self.video_input.hide()
@@ -804,6 +824,24 @@ class Wall(QMainWindow):
         if self.immersive and point != self.last_pointer and self.frameGeometry().contains(point):
             self.show_controls()
         self.last_pointer = point
+
+    def position_number_badges(self):
+        visible = (self.quadrant_labels_enabled and not self.immersive and not self.closing and
+                   not self.isMinimized() and QApplication.activeWindow() in self.owned_windows() and
+                   not QApplication.activeModalWidget() and not QApplication.activePopupWidget() and
+                   not (self.shortcuts_dialog and self.shortcuts_dialog.isVisible()))
+        for pane in self.panes:
+            badge = pane.number_badge
+            if not visible or not pane.isVisible():
+                badge.hide()
+                continue
+            rect = label_rect(QRect(pane.video.mapToGlobal(QPoint()), pane.video.size()),
+                              badge.size(), self.quadrant_label_corner)
+            if badge.geometry() != rect:
+                badge.setGeometry(rect)
+            if not badge.isVisible():
+                badge.show()
+                badge.raise_()
 
     def position_video_input(self):
         if self.shortcuts_dialog and self.shortcuts_dialog.isVisible():
@@ -985,6 +1023,7 @@ class Wall(QMainWindow):
         self.tools_overlay.hide()
         for pane in self.panes:
             pane.overlay.hide()
+            pane.number_badge.hide()
         for pane in self.panes:
             pane.stop()
         if (any(pane.worker and pane.worker.isRunning() for pane in self.panes) or

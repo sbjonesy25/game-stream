@@ -12,5 +12,8 @@
   "overlay_on_shortcuts": true,
   "overlay_timeout_ms": 2200,
   "overlay_opacity_percent": 85,
-  "button_text_size": 12
+  "button_text_size": 12,
+  "quadrant_labels_enabled": true,
+  "quadrant_label_size": 20,
+  "quadrant_label_corner": "top-left"
 }

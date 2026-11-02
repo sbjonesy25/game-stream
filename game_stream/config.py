@@ -11,6 +11,7 @@ DEFAULTS = dict(three_pane_layout='focus', three_pane_primary=1,
                 audio_border_color='#00ff00', overlay_enabled=True,
                 overlay_on_shortcuts=True, overlay_timeout_ms=2200,
                 overlay_opacity_percent=85, button_text_size=12)
+DEFAULTS.update(quadrant_labels_enabled=True, quadrant_label_size=20, quadrant_label_corner='top-left')
 
 
 def xdg_path(variable, fallback, suffix):
@@ -44,6 +45,10 @@ class ConfigStore:
 
     def validate(self, data):
         value = {**DEFAULTS, **data}
+        if value['quadrant_label_corner'] not in ('top-left', 'top-right', 'bottom-left', 'bottom-right'):
+            raise ValueError('Choose a valid quadrant number corner')
+        if type(value['quadrant_label_size']) is not int or not 10 <= value['quadrant_label_size'] <= 64:
+            raise ValueError('Quadrant number size must be 10–64 px')
         if value['theme'] not in ('default', 'light', 'dark'):
             raise ValueError('Choose Default, Light or Dark theme')
         if type(value['browser_max_height']) is not int or value['browser_max_height'] not in (0, 720, 1080):
@@ -64,7 +69,7 @@ class ConfigStore:
         if type(value['button_text_size']) is not int or not 9 <= value['button_text_size'] <= 24:
             raise ValueError('Button text size must be 9–24 px')
         if any(type(value[k]) is not bool for k in ('audio_border_enabled', 'overlay_enabled',
-                'overlay_on_shortcuts', 'solo_audio', 'show_browser')):
+                'overlay_on_shortcuts', 'solo_audio', 'show_browser', 'quadrant_labels_enabled')):
             raise ValueError('Invalid preferences')
         return {key: value[key] for key in DEFAULTS}
 
