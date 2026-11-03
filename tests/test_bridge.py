@@ -86,6 +86,8 @@ def test_browser_decoded_fragments_continue_after_handoff(tmp_path):
     const hls = new Hls(); let running = false;
     async function start() {
         if (running) return; running = true;
+        // A pre-roll manifest arrives before the real player's first fragment.
+        await new Promise(r => setTimeout(r, 5500));
         const index = await (await fetch('/index.json')).json();
         for (let i = 0; i < index.count; i++) {
             const encoded = await (await fetch('/part/' + i + '.png')).arrayBuffer();
@@ -94,6 +96,7 @@ def test_browser_decoded_fragments_continue_after_handoff(tmp_path):
             await new Promise(r => setTimeout(r, 200));
         }
     }
+    fetch('/ad.m3u8');
     </script>'''
 
     class Site(BaseHTTPRequestHandler):
@@ -105,6 +108,8 @@ def test_browser_decoded_fragments_continue_after_handoff(tmp_path):
                 body, mime = page.encode(), 'text/html'
             elif self.path == '/index.json':
                 body, mime = json.dumps({'count': len(segments)}).encode(), 'application/json'
+            elif self.path == '/ad.m3u8':
+                body, mime = b'#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\nad.ts\n#EXT-X-ENDLIST\n', 'application/vnd.apple.mpegurl'
             elif self.path.startswith('/part/'):
                 n = int(self.path.rsplit('/', 1)[-1].split('.')[0])
                 body, mime = b'\x89PNG\r\n\x1a\n' + segments[n], 'image/png'

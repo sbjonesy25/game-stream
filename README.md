@@ -8,11 +8,11 @@ The normal viewing window does not embed the source website.
 
 ## Shareable Ubuntu installer
 
-Download **[game-stream_0.2.6_amd64.deb](releases/game-stream_0.2.6_amd64.deb)**
+Download **[game-stream_0.2.7_amd64.deb](releases/game-stream_0.2.7_amd64.deb)**
 from `releases/` and install with:
 
 ```bash
-sudo apt install ./game-stream_0.2.6_amd64.deb
+sudo apt install ./game-stream_0.2.7_amd64.deb
 ```
 
 This is the Ubuntu/Linux installer; Android APK files do not run on Ubuntu.
@@ -45,7 +45,7 @@ download still require a host test.
 
 ### Update an installed application
 
-Install the current v0.2.6 package to get these controls. After that, use **Preferences → Updates → Save & check for updates…**. When a newer version is available, choose Yes to download it. Playback
+Install the current v0.2.7 package to get these controls. After that, use **Preferences → Updates → Save & check for updates…**. When a newer version is available, choose Yes to download it. Playback
 continues during the download; you can cancel without closing the app. The app
 checks the size, SHA256 checksum and Debian package name/version/architecture,
 saves the session, then closes all its source browsers. A detached helper waits
@@ -252,8 +252,10 @@ installs the browser version that matches it.
 7. Press **Load** again to restart an expired/disconnected session. A replacement
    browser starts after the previous worker has finished shutting down.
 
-For a direct `.m3u8` URL, no browser is needed. Ordinary detected HLS URLs can
-also use the HTTP relay, allowing the browser to close after discovery. Uncheck
+For a direct `.m3u8` URL, no browser is needed. For webpage links the browser
+stays running until Stop, replacement, or app shutdown, including ordinary HLS
+fallbacks. This preserves the browser session and permits a later switch to the
+fragment bridge. Uncheck
 **Preferences → Playback → Show browser** to try playback without a visible window. Some sites
 need a real player click, so visible browser mode is recommended first.
 
@@ -459,6 +461,16 @@ Cookies stay scoped to their paths/domains, and original files stay untouched.
 Decline session restoration to start without an old import. Cookie files and
 browser passwords are never bundled into installers.
 
+Page handoff prefers the fragment bridge. Ordinary HLS fallback waits at least
+15 seconds after a video starts playing, chooses a validated live playlist from
+that playing frame, and skips finite/VOD playlists such as pre-roll ads. Direct
+`.m3u8` input still supports finite playlists. Candidates are bounded to eight;
+this is a heuristic, not a guarantee of selecting every provider's main player.
+The browser remains open during fallback, browser cookies refresh every five
+seconds, and a later ready fragment bridge replaces the HTTP relay without
+changing the selected audio source. Stop/reload closes the associated browser.
+Duplicate/retried fragments are skipped without permanently disabling forwarding.
+
 For ordinary HLS, captured Referer, Origin, User-Agent and same-origin
 Authorization headers accompany relay requests. Nested playlists, media, keys,
 and initialization segments pass through that relay. Signed query strings are
@@ -519,7 +531,11 @@ Each folder contains `metadata.json`, `startup.json`, `memory.jsonl` (plus rotat
 Qt writes a small heartbeat every five seconds. An increasing heartbeat age shows
 when the interface stops servicing events. Reports include browser/app/VLC/driver
 process groups, memory/swap, CPU, threads, descriptors and system memory pressure;
-the sampler itself is identified separately. The first snapshot is retained even
+the sampler itself is identified separately. Per-pane heartbeats also record
+VLC state, whether playback started, direct/browser relay type, and (for a browser
+relay) accepted/buffered segment counts and age of the last accepted fragment.
+This distinguishes an initial player failure from stopped forwarding. It does not
+capture raw VLC logs or media. The first snapshot is retained even
 when later logs rotate. No stream URLs, cookies, browser pages, command lines,
 environment dumps, session files or memory dumps are collected. Files are private
 (0600), capture directories 0700. The sampler reads Linux `/proc`; inaccessible
@@ -612,8 +628,13 @@ CMAF/fMP4 fragments, or separate audio-only tracks through the browser bridge.
 Ordinary HLS still uses the existing HTTP relay where compatible. No CAPTCHA
 solving or paywall bypass is provided. TLS verification remains enabled.
 
-A page with an HLS advertisement before its main player may select the wrong
-source. Pages can change their player APIs, lose connectivity, expire their
+Early finite HLS ads and unrelated non-playing frames are excluded from page
+fallback. A live ad in the same playing frame or a player that hides its Hls.js
+instance can still need provider-specific support. If VLC never started, the
+status says "Player could not start"; an Ended state does not establish that the
+provider ended its broadcast. Enable Diagnostics, reproduce, then ZIP the new
+capture folder with the observed startup/status times for investigation.
+Pages can change their player APIs, lose connectivity, expire their
 session, or require another interaction in the source browser. When the source
 stalls, restore its browser and check playback, or press Load again. Closing the
 source browser stops the relay. Use streams you are authorized to access.
@@ -661,7 +682,7 @@ Close Game Stream, then from this checkout run:
 git pull
 ./scripts/uninstall-current-setup.sh --dry-run
 ./scripts/uninstall-current-setup.sh
-sudo apt install ./releases/game-stream_0.2.6_amd64.deb
+sudo apt install ./releases/game-stream_0.2.7_amd64.deb
 ```
 
 This removes old launcher/icon registration and only an editable console package
@@ -672,7 +693,7 @@ preferences too. Custom/symlinked environments and unrelated package installs
 are left alone. Launch the installed app from Applications afterward.
 
 The installer already provides **`game-stream-uninstall`**. A separate
-**[`game-stream-uninstaller_0.2.6.tar.gz`](releases/game-stream-uninstaller_0.2.6.tar.gz)**
+**[`game-stream-uninstaller_0.2.7.tar.gz`](releases/game-stream-uninstaller_0.2.7.tar.gz)**
 bundle and **[`uninstall-game-stream.sh`](releases/uninstall-game-stream.sh)**
 are also included in `releases/`; they work without a checkout or Qt/Python app
 runtime. Run `bash uninstall-game-stream.sh` as your normal desktop user. The
@@ -699,11 +720,17 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `GAME_STREAM_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **90 tests passed on Python 3.12 and 3.14** with
+Current development validation: **96 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
 Stop/reload cleanup, fullscreen 2-pixel geometry, and fading/revealing controls.
+Startup regressions cover delayed real video after a pre-roll playlist, actual
+FFmpeg decoding after browser handoff, playing-frame selection, keeping a direct
+fallback browser alive with refreshed cookies, duplicate-fragment recovery,
+relay replacement/audio preservation, startup error wording and private playback
+counters. Native VLC embedding on the user's host still needs the installation
+test; cloud media decoding uses FFmpeg rather than native libVLC.
 New checks cover label insets, composite opacity, independent idle fading,
 private startup captures in a real separate process, log rotation, PID reuse,
 retention/clear/purge ownership and symlink safety, heartbeat privacy and restart

@@ -1,10 +1,10 @@
 # Ubuntu installer
 
-Download `game-stream_0.2.5_amd64.deb` and `SHA256SUMS` from this directory.
+Download `game-stream_0.2.7_amd64.deb` and `SHA256SUMS` from this directory.
 
 ```bash
 sha256sum -c SHA256SUMS
-sudo apt install ./game-stream_0.2.5_amd64.deb
+sudo apt install ./game-stream_0.2.7_amd64.deb
 ```
 
 Open **Applications → Game Stream**. First launch downloads its private Python
@@ -21,19 +21,19 @@ The package is built from the source in this repository using
 libraries come from apt; Python/browser setup runs as the desktop user. See the
 root README for source installation, preferences and validation limits.
 
-v0.2.5 adds persistent quadrant-number labels with configurable corner, 10–64 px
-size and visibility in Preferences → Appearance. The number always follows its
-original quadrant through layout changes/zoom and remains when controls fade.
-The resource monitor now records per-process app/browser/driver memory, CPU,
-thread/descriptor counts, system RAM/swap pressure and approved settings. Send
-its `game-stream-memory.json` for continuing memory growth; no HAR/cookies/session
-file is needed. See the root README for the exact capture sequence.
+v0.2.7 fixes premature webpage-to-player handoff. It waits for playing video,
+skips obvious finite ad/VOD playlists during page fallback, keeps Chromium open
+with refreshed cookies, and allows a later switch to the fragment bridge.
+Duplicate video chunks no longer permanently disable forwarding. Startup errors
+identify player handoff failure rather than declaring the source stream ended.
+Debug captures include safe per-pane playback/relay counters for troubleshooting.
+See the root README for supported providers, capture steps and validation limits.
 Source, icon, update feed and installer are verified by the release workflow.
 
 ## Standalone uninstall tools
 
 - `uninstall-game-stream.sh`: download and run with `bash uninstall-game-stream.sh`.
-- `game-stream-uninstaller_0.2.5.tar.gz`: the same standalone script with instructions.
+- `game-stream-uninstaller_0.2.7.tar.gz`: the same standalone script with instructions.
 
 Both support `--dry-run` and `--purge-user-data`; run as the normal desktop user
 with the app closed. For a source checkout, `scripts/uninstall-current-setup.sh`
@@ -42,4 +42,5 @@ to be tested without old PATH/launcher conflicts. Source/dependencies stay intac
 
 All current artifacts are listed in `SHA256SUMS`. Every app change must rebuild
 these artifacts using `scripts/release.sh`; `scripts/check-release.py` verifies
-they match the current source. Older versioned installers are retained as history.
+they match the current source. This directory keeps only the current release;
+older release artifacts remain available in Git history.

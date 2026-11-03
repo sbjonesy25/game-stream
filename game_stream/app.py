@@ -146,6 +146,7 @@ class Pane(QFrame):
         self._request_generation = 0
         self._pending_request = None
         self.want_playing = False
+        self.has_played = False
         self._disposed = False
         self.relay = None
         self.player = wall.vlc.media_player_new()
@@ -223,7 +224,7 @@ class Pane(QFrame):
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.check_state)
         self.timer.start(750)
-        self.playback_started.connect(self.sync_audio)
+        self.playback_started.connect(self.on_playback_started)
         self._vlc_playing_callback = lambda event: self.playback_started.emit()
         import vlc
         self.player.event_manager().event_attach(vlc.EventType.MediaPlayerPlaying, self._vlc_playing_callback)
@@ -242,6 +243,11 @@ class Pane(QFrame):
             return
         self.player.audio_set_volume(self.volume.value())
         self.player.audio_set_mute(not self.audio.isChecked())
+
+    def on_playback_started(self):
+        if not self._disposed:
+            self.has_played = True
+            self.sync_audio()
 
     def paste_and_load(self):
         text = QApplication.clipboard().text().strip()
@@ -349,7 +355,12 @@ class Pane(QFrame):
         if self.worker and self.worker.cancel.is_set():
             return
         try:
-            self.relay = source.relay or Relay(source)
+            relay = source.relay or Relay(source)
+            if self.relay is not None and self.relay is not relay:
+                self.player.stop()
+                self.relay.close()
+            self.relay = relay
+            self.has_played = False
             self.player.set_xwindow(int(self.video.winId()))
             media = self.wall.vlc.media_new(self.relay.url)
             media.add_option(':network-caching=1500')
@@ -376,7 +387,9 @@ class Pane(QFrame):
         if state == vlc.State.Playing:
             self.sync_audio()
         labels = {vlc.State.Playing: 'Playing', vlc.State.Paused: 'Paused',
-                  vlc.State.Buffering: 'Buffering…', vlc.State.Ended: 'Stream ended — Load to reconnect',
+                  vlc.State.Buffering: 'Buffering…',
+                  vlc.State.Ended: ('Player stopped — Load to reconnect' if self.has_played else
+                                    'Player could not start — source handoff failed. Try Load.'),
                   vlc.State.Error: 'Playback failed — stream may have expired. Try Load or browser mode.'}
         if state in labels:
             self.status.setText(labels[state])

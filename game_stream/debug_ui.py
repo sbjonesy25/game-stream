@@ -1,10 +1,24 @@
 """Opt-in capture controls; sampling and growing logs stay out of the GUI process."""
 import os
+from time import monotonic
 from PySide6.QtCore import QObject, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import QMessageBox
 from .config import ConfigStore, write_json
 from .debug_capture import CaptureProcess, clear_captures, ensure_root
+from .bridge import BrowserRelay
+
+
+def playback_counters(pane):
+    state = str(pane.player.get_state()).rsplit('.', 1)[-1]
+    if state not in ('NothingSpecial', 'Opening', 'Buffering', 'Playing', 'Paused', 'Stopped', 'Ended', 'Error'):
+        state = 'unknown'
+    result = dict(player_state=state, playback_started=pane.has_played,
+                  relay_kind='browser' if isinstance(pane.relay, BrowserRelay) else 'direct' if pane.relay else 'none')
+    if isinstance(pane.relay, BrowserRelay):
+        result.update(accepted_segments=pane.relay.next_sequence, buffered_segments=len(pane.relay.segments),
+                      relay_age_seconds=round(max(0, monotonic() - pane.relay.updated), 1))
+    return result
 
 
 class DebugController(QObject):
@@ -46,7 +60,7 @@ class DebugController(QObject):
                     solo_audio=wall.solo.isChecked(), show_browser=wall.browser.isChecked(),
                     panes=[dict(number=p.number, audio=p.audio.isChecked(), has_link=bool(p.url.text()),
                                 worker_running=bool(p.worker and p.worker.isRunning()),
-                                relay_running=p.relay is not None) for p in wall.panes])
+                                relay_running=p.relay is not None, **playback_counters(p)) for p in wall.panes])
         try:
             write_json(self.capture.directory / 'heartbeat.json', data)
         except OSError:

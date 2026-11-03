@@ -76,7 +76,7 @@ class BrowserRelay:
             return len(self.segments) >= 3
 
     def push(self, player, fragment):
-        """Validate page messages; never store URLs, cookies, or unbounded media."""
+        """True = accepted, None = skip fragment, False = stop this player."""
         if self.closed.is_set():
             return False
         with self.lock:
@@ -89,19 +89,19 @@ class BrowserRelay:
             if (type(sn) is not int or type(cc) is not int or not 0 <= sn < 2**53 or
                     not 0 <= cc < 2**31 or not math.isfinite(duration) or not 0 < duration <= 60 or
                     not isinstance(encoded, str) or len(encoded) > 23 * 1024 * 1024):
-                return False
+                return None
             data = base64.b64decode(encoded, validate=True)
             if (not 940 <= len(data) <= 16 * 1024 * 1024 or len(data) % 188 or
                     any(data[i * 188] != 0x47 for i in range(5))):
-                return False
+                return None
         except (KeyError, ValueError, TypeError):
-            return False
+            return None
         with self.lock:
             if self.closed.is_set() or (self.selected is not None and self.selected != player):
                 return False
             self.selected = player
             if self.last_upstream and cc == self.last_upstream[1] and sn <= self.last_upstream[0]:
-                return False  # Retries, duplicate quality loads, or out-of-order arrivals.
+                return None  # Skip a retry/duplicate, without blacklisting this player.
             discontinuity = bool(self.last_upstream and (cc != self.last_upstream[1] or sn != self.last_upstream[0] + 1))
             self.segments[self.next_sequence] = dict(bytes=data, duration=duration, discontinuity=discontinuity,
                                                      disc_sequence=self.discontinuities)

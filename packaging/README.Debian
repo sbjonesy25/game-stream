@@ -2,7 +2,7 @@ Game Stream for Ubuntu amd64
 ===========================
 
 Install with:
-  sudo apt install ./game-stream_0.2.5_amd64.deb
+  sudo apt install ./game-stream_0.2.7_amd64.deb
 
 Open Applications > Game Stream. First launch requires internet and about 2 GB
 of free disk space for its private Python dependencies and Chromium browser.
@@ -14,7 +14,7 @@ fails. Setup diagnostics are in ~/.local/state/game-stream/setup.log.
 
 Close the app before uninstalling. Run as the normal desktop user:
   game-stream-uninstall
-Optional removal of this user's preferences/session/catalog:
+Optional removal of this user's preferences/session/catalog/inactive debug captures:
   game-stream-uninstall --purge-user-data
 Dry run:
   game-stream-uninstall --dry-run
@@ -30,16 +30,29 @@ This is not an Android APK and does not run on Android.
 
 Standalone uninstall tools are also distributed with each release:
   bash uninstall-game-stream.sh [--dry-run] [--purge-user-data]
-The game-stream-uninstaller_0.2.5.tar.gz bundle contains this script and instructions.
+The game-stream-uninstaller_0.2.7.tar.gz bundle contains this script and instructions.
 
-Release 0.2.5 adds persistent quadrant-number labels. Preferences > Appearance
-selects visibility, corner and independent size (10-64px; default top left, 20px).
-Numbers retain their original quadrant IDs across zoom/layout changes and stay
-visible when controls fade. No video frame copies or new browsers are needed.
-The repository monitor-resources.py writes a private schema-2 JSON report with
-per-process memory/CPU/threads/descriptors, system RAM/swap pressure and approved
-settings. Send that file with load/stall/stop times for continuing memory growth.
-It captures no command lines, URLs, cookies, session file or raw memory dumps.
+Release 0.2.7 fixes premature handoff after incidental HLS requests: it waits for
+playing video, skips finite/VOD page fallbacks, keeps Chromium alive with refreshed
+cookies and permits a later switch to the fragment bridge. Duplicate chunks are
+skipped without permanently disabling that player's forwarding. Initial VLC
+failures are reported as a player startup failure, not an ended broadcast.
+Diagnostics include per-pane VLC state, relay type and browser segment counters.
+
+Quadrant-number settings include offsets, opacity and independent always-on or
+timed fading. Preferences > Quadrant numbers selects visibility, corner, size,
+horizontal/vertical insets, opacity and the idle delay before fading. Numbers
+retain their original quadrant IDs across zoom/layout changes. No video frame
+copies or new browsers are needed.
+Preferences > Diagnostics enables startup resource captures and offers a restart
+with session restoration. Each launch creates a fresh timestamped folder under
+~/.local/state/game-stream/debug (or XDG_STATE_HOME). A separate sampler writes
+bounded resource logs even if the UI stalls; UI heartbeats record responsiveness.
+Open the debug folder, start a fresh capture, or clear saved captures from this
+tab. ZIP the relevant capture folder with load/stall/stop times for debugging.
+Captures contain per-process memory/CPU/threads/descriptors, system RAM/swap
+pressure and approved settings; no command lines, URLs, cookies, session file or
+raw memory dumps. The manual monitor-resources.py remains available as well.
 Default source quality remains 720p; the underlying buffer/relay limits from
 0.2.4 are unchanged. Resource diagnostics are measurement, not an assumed fix for
 all Chromium/GPU/native VLC behavior on a particular host.

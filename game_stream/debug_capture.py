@@ -141,6 +141,18 @@ def read_heartbeat(path):
             row = {'number': pane['number']}
             row.update({key: pane[key] for key in ('audio', 'has_link', 'worker_running', 'relay_running')
                         if type(pane.get(key)) is bool})
+            if type(pane.get('playback_started')) is bool:
+                row['playback_started'] = pane['playback_started']
+            for key in ('accepted_segments', 'buffered_segments'):
+                if type(pane.get(key)) is int and pane[key] >= 0:
+                    row[key] = pane[key]
+            if type(pane.get('relay_age_seconds')) in (int, float) and 0 <= pane['relay_age_seconds'] < 1e9:
+                row['relay_age_seconds'] = pane['relay_age_seconds']
+            if pane.get('relay_kind') in ('none', 'direct', 'browser'):
+                row['relay_kind'] = pane['relay_kind']
+            if pane.get('player_state') in ('NothingSpecial', 'Opening', 'Buffering', 'Playing', 'Paused',
+                                          'Stopped', 'Ended', 'Error', 'unknown'):
+                row['player_state'] = pane['player_state']
             result['panes'].append(row)
     return result
 

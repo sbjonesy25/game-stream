@@ -8,6 +8,9 @@
   documentation with the source changes.
 - scripts/check-release.py must pass before pushing. It detects stale source,
   icons, bootstrap/uninstall helpers and README content in the release artifacts.
+- Keep only the current version's installer and uninstaller bundle in releases/;
+  remove superseded artifacts after validating the replacement. Keep the current
+  standalone uninstaller, update feed and checksums. Never commit Python bytecode.
 - The user wants the source and rebuilt release artifacts pushed to the repository.
 - Preserve settings/session history during uninstall unless --purge-user-data is
   explicit. Never delete the source checkout, source .venv, unrelated Chromium

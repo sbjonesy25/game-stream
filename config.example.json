@@ -15,5 +15,11 @@
   "button_text_size": 12,
   "quadrant_labels_enabled": true,
   "quadrant_label_size": 20,
-  "quadrant_label_corner": "top-left"
+  "quadrant_label_corner": "top-left",
+  "quadrant_label_offset_x": 8,
+  "quadrant_label_offset_y": 8,
+  "quadrant_label_opacity_percent": 100,
+  "quadrant_label_display": "always",
+  "quadrant_label_timeout_ms": 2200,
+  "debug_enabled": false
 }

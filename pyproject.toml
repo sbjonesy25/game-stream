@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "game-stream"
-version = "0.2.6"
+version = "0.2.7"
 description = "A local four-pane HLS viewer for Ubuntu"
 requires-python = ">=3.10,<3.16"
 dependencies = ["PySide6-Essentials>=6.10.1,<7", "python-vlc==3.0.21203", "playwright==1.64.1", "requests==2.32.5"]
