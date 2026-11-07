@@ -2,7 +2,7 @@ Game Stream for Ubuntu amd64
 ===========================
 
 Install with:
-  sudo apt install ./game-stream_0.2.7_amd64.deb
+  sudo apt install ./game-stream_0.2.8_amd64.deb
 
 Open Applications > Game Stream. First launch requires internet and about 2 GB
 of free disk space for its private Python dependencies and Chromium browser.
@@ -30,14 +30,14 @@ This is not an Android APK and does not run on Android.
 
 Standalone uninstall tools are also distributed with each release:
   bash uninstall-game-stream.sh [--dry-run] [--purge-user-data]
-The game-stream-uninstaller_0.2.7.tar.gz bundle contains this script and instructions.
+The game-stream-uninstaller_0.2.8.tar.gz bundle contains this script and instructions.
 
-Release 0.2.7 fixes premature handoff after incidental HLS requests: it waits for
-playing video, skips finite/VOD page fallbacks, keeps Chromium alive with refreshed
-cookies and permits a later switch to the fragment bridge. Duplicate chunks are
-skipped without permanently disabling that player's forwarding. Initial VLC
-failures are reported as a player startup failure, not an ended broadcast.
-Diagnostics include per-pane VLC state, relay type and browser segment counters.
+Release 0.2.8 adds a bounded clear fragmented-MP4 MediaSource fallback with
+separate audio/video support, additional legacy Hls.js instance discovery, and
+ordinary AES-128 HLS capture after the browser decrypts it. No video frames are
+copied, no media is saved to disk, and no transcoder dependency is added. Debug
+captures identify browser-mp4 playback. DRM/EME and WebM SourceBuffers are not
+supported; the current stream's codecs must also be supported by native VLC.
 
 Quadrant-number settings include offsets, opacity and independent always-on or
 timed fading. Preferences > Quadrant numbers selects visibility, corner, size,

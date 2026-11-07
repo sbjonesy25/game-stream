@@ -6,6 +6,7 @@
     let serial = 0, pending = 0, connected = false, scanTicks = 0;
     const rejected = new WeakSet();
     const configured = new WeakSet();
+    const instances = new WeakSet(), emitting = new WeakSet();
     function boundPlayer(hls) {
         if (!hls?.config) return;
         // Hls.js otherwise permits an infinite retained back buffer. Apply before
@@ -26,11 +27,12 @@
     }
     function forward(hls, event, data) {
         boundPlayer(hls);
-        if (event !== 'hlsFragLoaded' || !data?.frag || !data.payload) return;
+        if (!['hlsFragLoaded', 'hlsFragDecrypted'].includes(event) || !data?.frag || !data.payload) return;
         const frag = data.frag, media = hls.media;
         if (frag.type !== 'main' || !Number.isFinite(frag.sn) ||
             !media || media.mediaKeys || rejected.has(hls) || pending >= 2) return;
-        if (frag.decryptdata?.method && frag.decryptdata.method !== 'NONE') return;
+        if (frag.decryptdata?.method && frag.decryptdata.method !== 'NONE' &&
+            !(event === 'hlsFragDecrypted' && frag.decryptdata.method === 'AES-128')) return;
         const bytes = new Uint8Array(data.payload.buffer || data.payload,
             data.payload.byteOffset || 0, data.payload.byteLength);
         if (bytes.length < 940 || bytes.length > 16 * 1024 * 1024 || bytes.length % 188) return;
@@ -50,16 +52,35 @@
         })
             .catch(() => {}).finally(() => pending--);
     }
+    function intercept(owner, instance = false) {
+        const trigger = owner.trigger;
+        owner.trigger = function(event, data, ...rest) {
+            // Copy before a player transfers the buffer to its transmux worker.
+            const receiver = instance ? owner : this;
+            const outer = !emitting.has(receiver);
+            if (outer) emitting.add(receiver);
+            try {
+                if (outer) try { forward(receiver, event, data); } catch (_) {}
+                return trigger.call(receiver, event, data, ...rest);
+            } finally { if (outer) emitting.delete(receiver); }
+        };
+    }
     function patch(Hls) {
         const proto = Hls?.prototype;
         if (!proto || typeof proto.trigger !== 'function' || patched.has(proto)) return;
         patched.add(proto);
-        const trigger = proto.trigger;
-        proto.trigger = function(event, data, ...rest) {
-            // Copy before a player transfers the buffer to its transmux worker.
-            try { forward(this, event, data); } catch (_) {}
-            return trigger.call(this, event, data, ...rest);
-        };
+        intercept(proto);
+    }
+    function inspectPlayer(p) {
+        const core = p?.core;
+        const pb = core?.getCurrentPlayback?.() || core?.activePlayback || core?.activeContainer?.playback || p;
+        for (const key of ['_hls', 'hls', 'hlsjs', '_hlsjs', '_player']) {
+            const hls = pb?.[key];
+            if (!hls || typeof hls.trigger !== 'function' || instances.has(hls)) continue;
+            instances.add(hls);
+            intercept(hls, true);
+            boundPlayer(hls);
+        }
     }
     function scan() {
         if (connected && ++scanTicks % 10) return;
@@ -69,8 +90,11 @@
         try {
             // Clappr pages can use a global lexical `let player`, not window.player.
             const p = typeof player !== 'undefined' ? player : globalThis.player;
-            patch(p?.core?.getCurrentPlayback?.()?._hls?.constructor);
+            inspectPlayer(p);
         } catch (_) {}
+        for (const node of document.querySelectorAll('#VideoFrame, [data-player]')) {
+            try { inspectPlayer(node._clapprPlayer); } catch (_) {}
+        }
         for (const video of document.querySelectorAll('video')) video.muted = true;
     }
     globalThis.__game_stream_scan = scan;

@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QFrame,
 
 from .proxy import Relay
 from .bridge import BrowserRelay
+from .cmaf import CmafRelay
 from .resolver import resolve, validate_url
 from .branding import APP_ID, DISPLAY_NAME, ICON_PATH, configure_application
 from .config import DEFAULTS
@@ -380,7 +381,7 @@ class Pane(QFrame):
         import vlc
         if not self.relay:
             return
-        if isinstance(self.relay, BrowserRelay) and monotonic() - self.relay.updated > 30:
+        if isinstance(self.relay, (BrowserRelay, CmafRelay)) and monotonic() - self.relay.updated > 30:
             self.status.setText('Source stalled — check its browser or Load again')
             return
         state = self.player.get_state()

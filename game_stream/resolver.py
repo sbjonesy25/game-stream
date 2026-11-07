@@ -85,6 +85,7 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
         return source
     from playwright.sync_api import sync_playwright, TimeoutError as BrowserTimeout
     from .bridge import BrowserRelay
+    from .cmaf import CmafRelay
     cancel = cancel or Event()
     # Four independent automation drivers must not each wait for a multi-GB
     # Node heap before collecting transient base64/JSON fragment messages.
@@ -98,6 +99,7 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
             args=['--mute-audio', '--autoplay-policy=no-user-gesture-required', '--disable-background-timer-throttling',
                   '--disable-renderer-backgrounding', '--disable-backgrounding-occluded-windows'])
         bridge = None
+        mse = None
         announced = False
         ordinary_source = None
         cookie_refresh = 0
@@ -107,14 +109,30 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                 context.add_cookies(cookies)
             if on_ready:
                 def fragment(binding, message):
-                    nonlocal bridge
+                    nonlocal bridge, mse
                     if cancel.is_set() or not isinstance(message, dict):
                         return
+                    if mse and mse.selected is not None:
+                        return False
                     if bridge is None:
                         bridge = BrowserRelay()
-                    return bridge.push((binding['frame'], message.get('player')), message)
+                    accepted = bridge.push((binding['frame'], message.get('player')), message)
+                    if accepted is True and mse:
+                        mse.close()
+                        mse = None
+                    return accepted
+                def mse_fragment(binding, message):
+                    nonlocal mse
+                    if cancel.is_set() or not isinstance(message, dict):
+                        return
+                    if bridge and bridge.selected is not None:
+                        return False
+                    if mse is None:
+                        mse = CmafRelay()
+                    return mse.push((binding['frame'], message.get('player')), message)
                 context.expose_binding('__game_stream_fragment', fragment)
-                script = Path(__file__).with_name('browser_bridge.js').read_text()
+                context.expose_binding('__game_stream_mse', mse_fragment)
+                script = '\n'.join(Path(__file__).with_name(name).read_text() for name in ('browser_mse.js', 'browser_bridge.js'))
                 context.add_init_script(script=f'globalThis.__game_stream_max_height = {max_height};\n' + script)
             page = context.new_page()
             context.on('page', lambda popup: popup.close())
@@ -139,16 +157,17 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
             while not cancel.is_set():
                 if page.is_closed():
                     raise RuntimeError('The source browser was closed. Load again and leave it running during playback.')
-                if bridge and bridge.ready and announced != 'bridge':
+                browser_relay = bridge if bridge and bridge.ready else mse if mse and mse.ready else None
+                if browser_relay and announced != 'bridge':
                     if not announced:
                         page.remove_listener('response', inspect)
                     announced = 'bridge'
                     ordinary_source = None
                     found.clear()
-                    source = Source(bridge.url, relay=bridge)
+                    source = Source(browser_relay.url, relay=browser_relay)
                     on_ready(source)
                     if on_status:
-                        on_status('Browser relay connected — keep the source browser running')
+                        on_status('Browser video connected — keep the source browser running')
                     if visible:
                         try:
                             session = context.new_cdp_session(page)
@@ -175,7 +194,7 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                         playing_since = monotonic()
                     previous_frames = active_frames
                     if (playing_since is not None and monotonic() - playing_since >= BROWSER_BRIDGE_GRACE
-                            and (bridge is None or not bridge.selected)):
+                            and (bridge is None or bridge.selected is None) and (mse is None or mse.selected is None)):
                         for candidate in tuple(reversed(found)):
                             response = candidate['response']
                             try:
@@ -201,7 +220,8 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
                     cookie_refresh = monotonic()
                 if not announced and monotonic() > deadline:
                     raise RuntimeError('No supported video detected. In browser mode, press Play and wait for video. '
-                                       'Supported players: HLS URLs and Hls.js/Clappr MPEG-TS. DRM and DASH are unsupported.')
+                                       'Supported media: HLS and clear MPEG-TS or fragmented MP4 browser playback. '
+                                       'Protected video and unsupported codecs cannot be transferred.')
                 # Never click a playing video: that would pause the source.
                 # Explicit auto_play callers can try Play in visible mode too.
                 if (not visible or auto_play) and not announced and monotonic() - last_click > 5:
@@ -241,3 +261,5 @@ def resolve(url, cookie_file='', visible=False, cancel=None, timeout=150,
             finally:
                 if bridge:
                     bridge.close()
+                if mse:
+                    mse.close()

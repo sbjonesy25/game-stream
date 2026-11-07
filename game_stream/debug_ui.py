@@ -7,6 +7,7 @@ from PySide6.QtWidgets import QMessageBox
 from .config import ConfigStore, write_json
 from .debug_capture import CaptureProcess, clear_captures, ensure_root
 from .bridge import BrowserRelay
+from .cmaf import CmafRelay
 
 
 def playback_counters(pane):
@@ -14,8 +15,9 @@ def playback_counters(pane):
     if state not in ('NothingSpecial', 'Opening', 'Buffering', 'Playing', 'Paused', 'Stopped', 'Ended', 'Error'):
         state = 'unknown'
     result = dict(player_state=state, playback_started=pane.has_played,
-                  relay_kind='browser' if isinstance(pane.relay, BrowserRelay) else 'direct' if pane.relay else 'none')
-    if isinstance(pane.relay, BrowserRelay):
+                  relay_kind='browser-mp4' if isinstance(pane.relay, CmafRelay) else
+                             'browser' if isinstance(pane.relay, BrowserRelay) else 'direct' if pane.relay else 'none')
+    if isinstance(pane.relay, (BrowserRelay, CmafRelay)):
         result.update(accepted_segments=pane.relay.next_sequence, buffered_segments=len(pane.relay.segments),
                       relay_age_seconds=round(max(0, monotonic() - pane.relay.updated), 1))
     return result

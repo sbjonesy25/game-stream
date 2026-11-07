@@ -148,7 +148,7 @@ def read_heartbeat(path):
                     row[key] = pane[key]
             if type(pane.get('relay_age_seconds')) in (int, float) and 0 <= pane['relay_age_seconds'] < 1e9:
                 row['relay_age_seconds'] = pane['relay_age_seconds']
-            if pane.get('relay_kind') in ('none', 'direct', 'browser'):
+            if pane.get('relay_kind') in ('none', 'direct', 'browser', 'browser-mp4'):
                 row['relay_kind'] = pane['relay_kind']
             if pane.get('player_state') in ('NothingSpecial', 'Opening', 'Buffering', 'Playing', 'Paused',
                                           'Stopped', 'Ended', 'Error', 'unknown'):

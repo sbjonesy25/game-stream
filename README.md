@@ -2,17 +2,18 @@
 
 An Ubuntu desktop app for watching one to four HLS streams in a PySide6 window.
 Paste a **web page URL** or a direct **`.m3u8` URL** into each pane. Chromium
-can relay decoded MPEG-TS fragments from Hls.js/Clappr players or discover
+can relay clear MPEG-TS fragments from Hls.js/Clappr players, capture clear
+fragmented MP4 submitted to browser MediaSource, or discover
 ordinary HLS URLs, then VLC plays just the video in the wall.
 The normal viewing window does not embed the source website.
 
 ## Shareable Ubuntu installer
 
-Download **[game-stream_0.2.7_amd64.deb](releases/game-stream_0.2.7_amd64.deb)**
+Download **[game-stream_0.2.8_amd64.deb](releases/game-stream_0.2.8_amd64.deb)**
 from `releases/` and install with:
 
 ```bash
-sudo apt install ./game-stream_0.2.7_amd64.deb
+sudo apt install ./game-stream_0.2.8_amd64.deb
 ```
 
 This is the Ubuntu/Linux installer; Android APK files do not run on Ubuntu.
@@ -45,7 +46,7 @@ download still require a host test.
 
 ### Update an installed application
 
-Install the current v0.2.7 package to get these controls. After that, use **Preferences → Updates → Save & check for updates…**. When a newer version is available, choose Yes to download it. Playback
+Install the current v0.2.8 package to get these controls. After that, use **Preferences → Updates → Save & check for updates…**. When a newer version is available, choose Yes to download it. Playback
 continues during the download; you can cancel without closing the app. The app
 checks the size, SHA256 checksum and Debian package name/version/architecture,
 saves the session, then closes all its source browsers. A detached helper waits
@@ -226,7 +227,8 @@ installs the browser version that matches it.
    **1–4 panes** (or Alt+1–4), paste a page link, and press **Load** or Enter.
 2. In the Chromium window, complete ordinary login/consent prompts and press
    **Play**. Wait for a few video segments to buffer (usually 10–20 seconds).
-   With a supported Hls.js/Clappr MPEG-TS player, video starts in the app and the
+   With a supported Hls.js/Clappr MPEG-TS player or clear MP4 MediaSource player,
+   video starts in the app and the
    source browser minimizes automatically when the window manager permits it.
    **Keep that browser open**: it handles stream renewals and decoding the site's
    transport. The browser is muted; VLC owns the audible output. Stop or close
@@ -532,7 +534,7 @@ Qt writes a small heartbeat every five seconds. An increasing heartbeat age show
 when the interface stops servicing events. Reports include browser/app/VLC/driver
 process groups, memory/swap, CPU, threads, descriptors and system memory pressure;
 the sampler itself is identified separately. Per-pane heartbeats also record
-VLC state, whether playback started, direct/browser relay type, and (for a browser
+VLC state, whether playback started, direct/browser/browser-mp4 relay type, and (for a browser
 relay) accepted/buffered segment counts and age of the last accepted fragment.
 This distinguishes an initial player failure from stopped forwarding. It does not
 capture raw VLC logs or media. The first snapshot is retained even
@@ -622,11 +624,26 @@ stall. The app's raw input transport and supported-provider limitations still ap
 
 ### Compatibility limits
 
-Browser bridging currently supports **Hls.js/Clappr players emitting clear,
-complete MPEG-TS fragments**. It does not handle DRM/EME, DASH-only players,
-CMAF/fMP4 fragments, or separate audio-only tracks through the browser bridge.
-Ordinary HLS still uses the existing HTTP relay where compatible. No CAPTCHA
-solving or paywall bypass is provided. TLS verification remains enabled.
+Browser bridging supports **Hls.js/Clappr clear MPEG-TS**, including ordinary
+AES-128 HLS after the page decrypts it, and **clear fragmented MP4 submitted to
+main-thread MediaSource**. The MP4 fallback works even when Hls.js is hidden or
+uses a transmuxing worker or progressive loading. It carries separate video and audio buffers through a
+local HLS master playlist, retaining initialization segments and media timing.
+It does not copy decoded video frames, transcode media, save media to disk, or
+add a new system dependency. The application still plays video through native VLC.
+
+Both browser relays use bounded caches (48 MiB, eight segments per track, at most
+four MP4 tracks). Duplicate fragments are ignored. MP4 initialization changes
+produce HLS map/discontinuity updates. Pending audio from other frames cannot
+claim the selected video source. Only the chosen player is forwarded. Stop,
+replacement and shutdown close both the browser and relay servers.
+
+DRM/EME media is skipped. WebM SourceBuffers, MediaSource instances created
+entirely inside a worker, and codecs unsupported by native VLC are not covered.
+DASH-backed browser players may work through their clear MP4
+MediaSource output; direct MPD input is not implemented. Ordinary HLS uses the
+HTTP relay where compatible. Login/consent remains in the source browser.
+TLS verification remains enabled.
 
 Early finite HLS ads and unrelated non-playing frames are excluded from page
 fallback. A live ad in the same playing frame or a player that hides its Hls.js
@@ -682,7 +699,7 @@ Close Game Stream, then from this checkout run:
 git pull
 ./scripts/uninstall-current-setup.sh --dry-run
 ./scripts/uninstall-current-setup.sh
-sudo apt install ./releases/game-stream_0.2.7_amd64.deb
+sudo apt install ./releases/game-stream_0.2.8_amd64.deb
 ```
 
 This removes old launcher/icon registration and only an editable console package
@@ -693,7 +710,7 @@ preferences too. Custom/symlinked environments and unrelated package installs
 are left alone. Launch the installed app from Applications afterward.
 
 The installer already provides **`game-stream-uninstall`**. A separate
-**[`game-stream-uninstaller_0.2.7.tar.gz`](releases/game-stream-uninstaller_0.2.7.tar.gz)**
+**[`game-stream-uninstaller_0.2.8.tar.gz`](releases/game-stream-uninstaller_0.2.8.tar.gz)**
 bundle and **[`uninstall-game-stream.sh`](releases/uninstall-game-stream.sh)**
 are also included in `releases/`; they work without a checkout or Qt/Python app
 runtime. Run `bash uninstall-game-stream.sh` as your normal desktop user. The
@@ -720,11 +737,18 @@ through the relay with FFmpeg. The FFmpeg test explicitly skips when FFmpeg is
 absent. The Chromium test requires Playwright's browser or a system `chromium` /
 `chromium-browser`; set `GAME_STREAM_CHROMIUM=/path/to/chromium` to choose one.
 
-Current development validation: **96 tests passed on Python 3.12 and 3.14** with
+Current development validation: **108 tests passed on Python 3.12 and 3.14** with
 PySide6 6.12.0 and Playwright 1.64.1, including Chromium discovery and FFmpeg
 decoding. Added tests exercise a JSON/image-labelled transport in a real browser,
 continued fragment delivery after handoff, bounded relay memory, discontinuities,
 Stop/reload cleanup, fullscreen 2-pixel geometry, and fading/revealing controls.
+An offline copy of the supplied page's Clappr 0.3.13 library is included only
+as a licensed test fixture. Generated video/audio exercises real Chromium playback
+and FFmpeg decoding for TS, fragmented MP4, ordinary AES-128 HLS, and generic
+MediaSource with separate audio/video and no exposed Hls.js object. MP4 tests
+cover malformed boxes, timing, audio/video playlists, pending-player isolation,
+cache bounds and cleanup. These tests establish the supported transfer paths;
+the current live site and native VLC on each Ubuntu host still need host testing.
 Startup regressions cover delayed real video after a pre-roll playlist, actual
 FFmpeg decoding after browser handoff, playing-frame selection, keeping a direct
 fallback browser alive with refreshed cookies, duplicate-fragment recovery,

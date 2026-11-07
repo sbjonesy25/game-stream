@@ -1,10 +1,10 @@
 # Ubuntu installer
 
-Download `game-stream_0.2.7_amd64.deb` and `SHA256SUMS` from this directory.
+Download `game-stream_0.2.8_amd64.deb` and `SHA256SUMS` from this directory.
 
 ```bash
 sha256sum -c SHA256SUMS
-sudo apt install ./game-stream_0.2.7_amd64.deb
+sudo apt install ./game-stream_0.2.8_amd64.deb
 ```
 
 Open **Applications → Game Stream**. First launch downloads its private Python
@@ -21,19 +21,19 @@ The package is built from the source in this repository using
 libraries come from apt; Python/browser setup runs as the desktop user. See the
 root README for source installation, preferences and validation limits.
 
-v0.2.7 fixes premature webpage-to-player handoff. It waits for playing video,
-skips obvious finite ad/VOD playlists during page fallback, keeps Chromium open
-with refreshed cookies, and allows a later switch to the fragment bridge.
-Duplicate video chunks no longer permanently disable forwarding. Startup errors
-identify player handoff failure rather than declaring the source stream ended.
-Debug captures include safe per-pane playback/relay counters for troubleshooting.
-See the root README for supported providers, capture steps and validation limits.
+v0.2.8 adds a clear fragmented-MP4 MediaSource fallback for players the original
+TS hook cannot capture, including separate audio/video buffers. It also handles
+browser-decrypted ordinary AES-128 HLS and additional legacy player instance
+paths. Relay caches are bounded; media remains in memory and native VLC remains
+the application player. Debug captures distinguish the MP4 browser relay.
+Real Chromium/Clappr playback and FFmpeg video/audio decoding are regression-tested.
+See the root README for supported formats and remaining limits.
 Source, icon, update feed and installer are verified by the release workflow.
 
 ## Standalone uninstall tools
 
 - `uninstall-game-stream.sh`: download and run with `bash uninstall-game-stream.sh`.
-- `game-stream-uninstaller_0.2.7.tar.gz`: the same standalone script with instructions.
+- `game-stream-uninstaller_0.2.8.tar.gz`: the same standalone script with instructions.
 
 Both support `--dry-run` and `--purge-user-data`; run as the normal desktop user
 with the app closed. For a source checkout, `scripts/uninstall-current-setup.sh`
